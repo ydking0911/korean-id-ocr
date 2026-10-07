@@ -31,6 +31,17 @@
 
 파생 값: 생년월일 · 성별 · 외국인 여부 · 면허 지역 · 기간 만료 여부. 전체 형식은 [응답 스키마](docs/05-output-schema.md).
 
+## 📊 정확도 (합성 데이터 홀드아웃 300장)
+
+| | 주민등록증 | 운전면허증 |
+|---|---|---|
+| 판정 OK | 98.7% | 94.7% |
+| 핵심 필드 정답 (이름·주민번호·면허번호, 10개 촬영 조건 모두) | 100% | 100% |
+| 전 필드 정답 (띄어쓰기 무시) | 94.7% | 78.0% |
+| 처리 시간 p50 | 1.4초 (CPU 4코어 공유) | |
+
+합성 데이터 기준이며 실물 성능은 아직 확인 전입니다. 자세한 내용은 [평가 결과](docs/11-evaluation.md).
+
 ## 🔍 동작 방식
 
 ```mermaid
@@ -176,6 +187,17 @@ models/manifest.json        모델 목록 · 해시 (바이너리는 gitignore)
 
 </details>
 
+## 🧪 합성 데이터 · 평가
+
+```bash
+python -m tools.synth.assets        # 폰트 (OFL)
+python -m tools.synth.template      # 견본 → 빈 템플릿 (samples/specimen 필요)
+python -m tools.synth.generate --per-condition 15 --seed 1
+python -m tools.evaluate --data samples/synthetic   # → samples/eval/latest/report.md
+```
+
+촬영 조건 10종(원근·회전·밝기·어둡게·흐림·저화질·반사광·배경·축소)으로 가짜 신분증을 만들고, 필드 정확도·오채택·신뢰도 임계값을 측정합니다. [합성 데이터 계획](docs/10-synthetic-data.md)
+
 ## ✅ 테스트 · CI
 
 [GitHub Actions](.github/workflows/ci.yml)가 `main`·`develop` 푸시와 PR마다 실행한다.
@@ -202,8 +224,8 @@ models/manifest.json        모델 목록 · 해시 (바이너리는 gitignore)
 | 1. Docker OCR worker | ✅ |
 | 2. 주민등록증 앞면 구조화 | ✅ |
 | 3. 운전면허증 앞면 구조화 | ✅ |
-| 4. 합성 데이터 + 평가 하네스 (조건별 정확도, 임계값 보정) | 🔄 |
-| 5. 파인튜닝 (평가 결과 인식 오류가 주원인일 때만) | ❔ |
+| 4. 합성 데이터 + 평가 하네스 (조건별 정확도, 임계값 보정) | ✅ |
+| 5. 주소 사전 교정 → 필요 시 파인튜닝 | ❔ |
 
 자세한 진행 현황은 [로드맵](docs/09-roadmap.md), 설계·결정 기록은 [`docs/`](docs/README.md).
 
