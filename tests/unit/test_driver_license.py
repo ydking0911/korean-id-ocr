@@ -163,3 +163,19 @@ def test_find_license_types(raw, expected):
 @pytest.mark.parametrize("raw,code", [("NV676V", "NV676V"), ("nv676v", "NV676V"), ("SAA", None), ("123456", None)])
 def test_find_serial_code(raw, code):
     assert T.find_serial_code(raw) == code
+
+
+def test_address_line_with_only_house_number_is_kept():
+    lines = [l for l in LICENSE_CONTRAST if "대륨" not in l.text and "18차20층" not in l.text]
+    lines.insert(7, line("154", 600, 472, 700, 550, 0.99))
+    ex = run(lines)
+    assert ex.fields["address_lines"].value == ["서울특별시 가산디지털1로", "154"]
+
+
+def test_police_issuer_snapped_to_closed_set():
+    lines = [line("2014.11.21.경기남부지방경칠", 601, 836, 1368, 921, 0.95) if "경찰" in l.text else l
+             for l in LICENSE_CONTRAST]
+    ex = run(lines)
+    assert ex.fields["issuer"].value == "경기남부지방경찰청장"
+    assert ex.fields["issuer"].valid
+    assert ex.warnings.count("REPAIRED:issuer") == 1

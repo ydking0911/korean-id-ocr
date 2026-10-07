@@ -50,7 +50,12 @@ def extract(lines: list[Line], title: Line | None, recognize: Recognizer | None 
     if date_line is not None:
         issuer = read_issuer(lines, date_line, warnings)
         if issuer is not None:
-            issuer.valid = issuer.valid and "경찰" in issuer.value
+            snapped, changed = T.snap_police_issuer(issuer.value)
+            if changed:
+                issuer.value = snapped
+                if "REPAIRED:issuer" not in warnings:
+                    warnings.append("REPAIRED:issuer")
+            issuer.valid = issuer.value in T.POLICE_ISSUERS
         fields["issuer"] = issuer
 
     _find_serial_code(lines, rrn_line, fields)

@@ -52,7 +52,9 @@ def read_name(line: Line, recognize: Recognizer | None) -> tuple[FieldValue | No
 
 def read_address(body: list[Line]) -> tuple[FieldValue | None, FieldValue | None]:
     """주소 영역 줄들 → (주소, 줄 목록). 한 줄이 여러 박스로 쪼개져도 줄 단위로 이어 붙인다."""
-    body = [l for l in body if T.HANGUL.search(l.text) and len(l.text.strip()) >= 2]
+    # 번지만 있는 줄('154')처럼 한글이 없어도 숫자가 있으면 주소 줄이다
+    body = [l for l in body if (T.HANGUL.search(l.text) or any(c.isdigit() for c in l.text))
+            and len(l.text.strip()) >= 2]
     if not body:
         return None, None
     grouped = rows(body)

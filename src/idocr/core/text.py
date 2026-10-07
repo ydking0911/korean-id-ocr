@@ -173,15 +173,39 @@ _ISSUER_SUFFIX = ("청장", "시장", "군수", "읍장", "면장", "동장")
 
 
 def repair_issuer(issuer: str) -> tuple[str, bool]:
-    """직인에 가려 끝 글자가 빠진 발급기관 보정. (값, 보정 여부)"""
+    """직인에 가려 끝 글자가 빠지거나 틀린 발급기관 보정. (값, 보정 여부)"""
     s = space_after_sido(collapse_spaces(issuer))
+    s = re.sub(r"\s+(?=(?:장|청장|시장|군수)$)", "", s)  # '세종특별자치시 장' → '세종특별자치시장'
     if s.endswith(_ISSUER_SUFFIX):
         return s, False
+    # 접미사 한 글자만 틀린 경우: '경찰청징' → '경찰청장'
+    for suf in ("청장", "시장", "군수"):
+        if len(s) >= 3 and s[-2] == suf[0] and HANGUL.fullmatch(s[-1]):
+            return s[:-1] + suf[1], True
     for cut, fix in (("경찰", "경찰청장"), ("경찰청", "경찰청장"), ("구청", "구청장"), ("군청", "군수"),
                      ("시청", "시장"), ("구", "구청장"), ("군", "군수")):
         if s.endswith(cut):
             return s[: len(s) - len(cut)] + fix, True
     return s, False
+
+
+# 면허 발급 경찰청 (2021년 이전 '○○지방경찰청장', 2016년 이전 경기는 남·북부 분리 전)
+_POLICE_REGIONS = ("서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "경기남부", "경기북부",
+                   "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주")
+POLICE_ISSUERS = tuple(f"{r}{j}경찰청장" for r in _POLICE_REGIONS for j in ("", "지방"))
+
+
+def snap_police_issuer(issuer: str, min_ratio: float = 0.75) -> tuple[str, bool]:
+    """면허증 발급기관은 닫힌 집합 → 가장 가까운 값으로 맞춘다. (값, 바뀌었는지)"""
+    from difflib import SequenceMatcher
+
+    s = re.sub(r"\s", "", issuer)
+    if s in POLICE_ISSUERS:
+        return s, s != issuer
+    best = max(POLICE_ISSUERS, key=lambda c: SequenceMatcher(None, s, c).ratio())
+    if SequenceMatcher(None, s, best).ratio() >= min_ratio:
+        return best, True
+    return issuer, False
 
 
 def issuer_is_valid(issuer: str) -> bool:

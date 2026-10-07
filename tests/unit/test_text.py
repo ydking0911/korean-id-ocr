@@ -109,3 +109,30 @@ def test_repair_issuer(raw, fixed, repaired):
 def test_text_after_numbers():
     assert T.text_after_numbers("2014. 11. 21. 서울지방경찰") == "서울지방경찰"
     assert T.text_after_numbers("2020.08.16.") == ""
+
+
+@pytest.mark.parametrize(
+    "raw,fixed,repaired",
+    [
+        ("세종특별자치시 장", "세종특별자치시장", False),  # 직인 조각으로 쪼개진 접미사
+        ("경남지방경찰청징", "경남지방경찰청장", True),  # 접미사 한 글자 오인식
+        ("서울특별시 금천구청징", "서울특별시 금천구청장", True),
+    ],
+)
+def test_repair_issuer_suffix(raw, fixed, repaired):
+    assert T.repair_issuer(raw) == (fixed, repaired)
+
+
+@pytest.mark.parametrize(
+    "raw,snapped,changed",
+    [
+        ("서울지방경찰청장", "서울지방경찰청장", False),
+        ("서울경찰청장", "서울경찰청장", False),
+        ("경기남부지방경칠", "경기남부지방경찰청장", True),
+        ("부산지방경찰청징", "부산지방경찰청장", True),
+        ("전북지빙", "전북지빙", False),  # 너무 많이 잘리면 억지로 맞추지 않음
+        ("서울특별시 금천구청장", "서울특별시 금천구청장", False),
+    ],
+)
+def test_snap_police_issuer(raw, snapped, changed):
+    assert T.snap_police_issuer(raw) == (snapped, changed)
