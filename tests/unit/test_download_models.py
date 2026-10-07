@@ -58,3 +58,9 @@ def test_failed_download_leaves_no_partial_file(tmp_path):
     assert download_models.main(["--manifest", str(m)]) == 1
     assert list(m.parent.glob("*.part")) == []
     assert not (m.parent / "a.onnx").exists()
+
+
+def test_downloaded_file_is_world_readable(tmp_path):
+    m = setup_source(tmp_path, {"a.onnx": b"aaa"}, {"a.onnx": sha(b"aaa")})
+    assert download_models.main(["--manifest", str(m)]) == 0
+    assert (m.parent / "a.onnx").stat().st_mode & 0o044 == 0o044

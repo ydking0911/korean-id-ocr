@@ -55,6 +55,8 @@ def download(url: str, dest: Path) -> None:
         with os.fdopen(fd, "wb") as out, urllib.request.urlopen(url, timeout=60) as resp:
             while chunk := resp.read(1 << 20):
                 out.write(chunk)
+        # mkstemp는 0600으로 만든다 → 컨테이너의 non-root 사용자가 읽을 수 있게
+        os.chmod(tmp, 0o644)
         os.replace(tmp, dest)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)

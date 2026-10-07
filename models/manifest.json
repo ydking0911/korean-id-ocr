@@ -15,7 +15,7 @@
     },
     "rec_korean_v5_dict": {
       "path": "paddle/PP-OCRv5/rec/korean_PP-OCRv5_rec_mobile/ppocrv5_korean_dict.txt",
-      "sha256": null
+      "sha256": "a88071c68c01707489baa79ebe0405b7beb5cca229f4fc94cc3ef992328802d7"
     },
     "cls_v2_mobile": {
       "path": "onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_mobile.onnx",
