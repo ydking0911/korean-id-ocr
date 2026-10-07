@@ -41,6 +41,16 @@ python -m idocr.cli raw image.jpg    # 텍스트 줄
 uvicorn --factory idocr.service.app:create_app --port 8000
 ```
 
+## CI
+
+`.github/workflows/ci.yml` — `main`·`develop` 푸시와 PR마다 실행.
+
+| 작업 | 내용 |
+|---|---|
+| Unit tests | `pytest tests/unit` |
+| OCR tests | 모델 다운로드·SHA256 검증(캐시) 후 `pytest tests/ocr`. 견본 이미지는 저장소에 없어 견본 테스트는 skip |
+| Docker build | 이미지 빌드(푸시 안 함) + 컨테이너 기동·`/v1/ocr/id` 스모크 |
+
 ## 주요 설정 (`IDOCR_*` 환경변수)
 
 | 변수 | 기본값 | 설명 |
