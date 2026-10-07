@@ -26,10 +26,18 @@ class ModelCharsetError(Exception):
 
 
 @dataclass(frozen=True)
+class OcrChar:
+    text: str
+    score: float
+    box: list[list[float]]
+
+
+@dataclass(frozen=True)
 class OcrLine:
     text: str
     score: float
     box: list[list[float]]  # 4점 [[x, y], ...], 축소 전 원본 좌표
+    chars: tuple[OcrChar, ...] = ()  # 글자 단위 박스 (줄 안에서 필드를 나눌 때 사용)
 
 
 @dataclass(frozen=True)
@@ -97,6 +105,7 @@ class OcrEngine:
         if missing:
             raise ModelFilesMissing(", ".join(missing))
         self._ocr = RapidOCR(params=build_params(settings))
+        self._use_cls = settings.use_cls
         if settings.require_hangul and not self.has_hangul():
             raise ModelCharsetError("recognition model charset has no Hangul")
 
@@ -108,16 +117,38 @@ class OcrEngine:
         return any("가" <= c <= "힣" for c in self.charset)
 
     def run(self, bgr: np.ndarray, scale: float = 1.0) -> list[OcrLine]:
-        out = self._ocr(bgr)
+        # rapidocr는 호출 인자를 내부 상태로 남기므로 매번 명시한다
+        out = self._ocr(bgr, use_det=True, use_cls=self._use_cls, use_rec=True,
+                        return_word_box=True, return_single_char_box=True)
         if out is None or out.txts is None or out.boxes is None:
             return []
         inv = 1.0 / scale if scale else 1.0
-        lines = []
         scores = out.scores if out.scores is not None else [0.0] * len(out.txts)
-        for text, score, box in zip(out.txts, scores, out.boxes):
-            pts = [[round(float(x) * inv, 1), round(float(y) * inv, 1)] for x, y in np.asarray(box).tolist()]
-            lines.append(OcrLine(text=str(text), score=round(float(score), 4), box=pts))
+        words = out.word_results if len(out.word_results) == len(out.txts) else [()] * len(out.txts)
+        lines = []
+        for text, score, box, chars in zip(out.txts, scores, out.boxes, words):
+            lines.append(OcrLine(
+                text=str(text),
+                score=round(float(score), 4),
+                box=_scale_pts(box, inv),
+                chars=tuple(
+                    OcrChar(text=str(c), score=round(float(cs), 4), box=_scale_pts(cb, inv))
+                    for c, cs, cb in (chars or ()) if cb is not None
+                ),
+            ))
         return lines
+
+    def recognize(self, bgr: np.ndarray) -> tuple[str, float]:
+        """검출 없이 이미지 한 장을 한 줄로 인식 (필드 영역 재인식용)."""
+        out = self._ocr(bgr, use_det=False, use_cls=False, use_rec=True,
+                        return_word_box=False, return_single_char_box=False)
+        if out is None or not out.txts:
+            return "", 0.0
+        return str(out.txts[0]), round(float(out.scores[0]), 4)
+
+
+def _scale_pts(box, inv: float) -> list[list[float]]:
+    return [[round(float(x) * inv, 1), round(float(y) * inv, 1)] for x, y in np.asarray(box).tolist()]
 
 
 def model_info(settings: Settings) -> ModelInfo:

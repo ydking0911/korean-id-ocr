@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -33,6 +34,14 @@ class Settings(BaseSettings):
 
     # 기동 시 인식 모델 문자 집합에 한글이 있는지 확인. 비한국어 모델로 배선만 시험할 때만 끈다
     require_hangul: bool = True
+
+    # 주민번호 출력: full(개발 기본) | masked("900101-1******")
+    rrn_output: Literal["full", "masked"] = "full"
+
+    # 필드 채택 신뢰도 임계값 (docs/05-output-schema.md 6절). 평가 하네스로 재조정 예정
+    threshold_numeric: float = 0.90
+    threshold_text: float = 0.85
+    threshold_address: float = 0.80
 
     log_level: str = "INFO"
 

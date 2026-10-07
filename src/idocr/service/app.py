@@ -20,12 +20,17 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from idocr.config import Settings, get_settings
+from idocr.core import judge
+from idocr.core.pipeline import analyze
+from idocr.core.result import FailReason
 from idocr.ocr.engine import EnginePool, ModelInfo, model_info
 from idocr.ocr.preprocess import ImageDecodeError, prepare
 from idocr.privacy.logging import safe_exc, setup_logging
 from idocr.service.schemas import ErrorResponse, ImageMeta, OcrLineOut, RawOcrResponse
 
 log = logging.getLogger("idocr.service")
+
+SCHEMA_VERSION = "1.0"
 
 ACCEPTED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "application/octet-stream"}
 
@@ -104,7 +109,10 @@ def create_app(
         started = time.perf_counter()
 
         data = await _read_image_body(request, rt.settings.max_image_bytes)
-        lines, prepared = await _run_ocr(rt, data)
+        try:
+            lines, prepared = await _run_job(rt, _raw_job, data)
+        except ImageDecodeError:
+            raise ApiError(400, "IMAGE_DECODE_ERROR") from None
         del data
 
         return RawOcrResponse(
@@ -119,6 +127,31 @@ def create_app(
             model=asdict(rt.models),
             elapsed_ms=round((time.perf_counter() - started) * 1000),
         )
+
+    @app.post(
+        "/v1/ocr/id",
+        responses={413: {"model": ErrorResponse}, 415: {"model": ErrorResponse},
+                   503: {"model": ErrorResponse}, 504: {"model": ErrorResponse}},
+        summary="신분증 이미지 → 구조화 JSON",
+        description="응답 형식은 docs/05-output-schema.md. 이미지 디코딩 실패도 200 + status=FAIL로 응답한다.",
+    )
+    async def ocr_id(request: Request):
+        rt: _Runtime = request.app.state.runtime
+        started = time.perf_counter()
+
+        data = await _read_image_body(request, rt.settings.max_image_bytes)
+        try:
+            result = await _run_job(rt, _id_job, data)
+        except ImageDecodeError:
+            result = judge.failure(FailReason.IMAGE_DECODE_ERROR, {})
+        del data
+
+        return {
+            "request_id": request.state.request_id,
+            **result.to_dict(),
+            "model": {**asdict(rt.models), "schema": SCHEMA_VERSION},
+            "elapsed_ms": round((time.perf_counter() - started) * 1000),
+        }
 
     return app
 
@@ -141,13 +174,13 @@ async def _read_image_body(request: Request, limit: int) -> bytes:
     return bytes(buf)
 
 
-async def _run_ocr(rt: _Runtime, data: bytes):
+async def _run_job(rt: _Runtime, job, data: bytes):
     if rt.in_flight >= rt.settings.queue_limit:
         raise ApiError(503, "BUSY")
     rt.in_flight += 1
     try:
         loop = asyncio.get_running_loop()
-        future = loop.run_in_executor(rt.executor, _ocr_job, rt, data)
+        future = loop.run_in_executor(rt.executor, job, rt, data)
         try:
             return await asyncio.wait_for(future, timeout=rt.settings.request_timeout_s)
         except asyncio.TimeoutError:
@@ -156,14 +189,23 @@ async def _run_ocr(rt: _Runtime, data: bytes):
         rt.in_flight -= 1
 
 
-def _ocr_job(rt: _Runtime, data: bytes):
-    try:
-        prepared = prepare(data, max_side_len=rt.settings.max_side_len, max_pixels=rt.settings.max_image_pixels)
-    except ImageDecodeError:
-        raise ApiError(400, "IMAGE_DECODE_ERROR") from None
+def _prepare(rt: _Runtime, data: bytes):
+    return prepare(data, max_side_len=rt.settings.max_side_len, max_pixels=rt.settings.max_image_pixels)
+
+
+def _raw_job(rt: _Runtime, data: bytes):
+    prepared = _prepare(rt, data)
     with rt.pool.acquire() as engine:
         lines = engine.run(prepared.bgr, scale=prepared.scale)
     return lines, prepared
+
+
+def _id_job(rt: _Runtime, data: bytes):
+    prepared = _prepare(rt, data)
+    s = rt.settings
+    thresholds = judge.Thresholds(s.threshold_numeric, s.threshold_text, s.threshold_address)
+    with rt.pool.acquire() as engine:
+        return analyze(prepared, engine, thresholds, mask_rrn=s.rrn_output == "masked")
 
 
 def _error(request: Request, status: int, code: str) -> JSONResponse:

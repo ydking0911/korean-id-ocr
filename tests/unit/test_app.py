@@ -135,3 +135,62 @@ def test_internal_error_does_not_leak(jpeg_bytes, caplog):
     assert "1234567" not in r.text
     assert "1234567" not in caplog.text
     assert "RuntimeError" in caplog.text
+
+
+class SpecimenEngine(FakeEngine):
+    def run(self, bgr, scale=1.0):
+        from tests.unit.test_resident_card import SPECIMEN
+        return list(SPECIMEN)
+
+    def recognize(self, crop):
+        return "홍길동", 0.93
+
+
+def make_id_client(engine, **overrides) -> TestClient:
+    settings = Settings(ocr_workers=1, **overrides)
+    app = create_app(settings, pool_factory=lambda s: EnginePool([engine]), model_info_factory=lambda s: FAKE_MODELS)
+    return TestClient(app)
+
+
+def post_id(client, data, content_type="image/jpeg"):
+    return client.post("/v1/ocr/id", content=data, headers={"Content-Type": content_type})
+
+
+def test_id_endpoint_structured_result():
+    with make_id_client(SpecimenEngine()) as client:
+        r = post_id(client, make_image((1573, 1000)))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "OK"
+    assert body["document_type"] == "RESIDENT_CARD"
+    assert body["fields"]["name"] == "홍길동"
+    assert body["fields"]["rrn"] == "800101-2345678"
+    assert body["field_meta"]["rrn"]["accepted"] is True
+    assert body["model"]["schema"] == "1.0"
+    assert len(body["request_id"]) == 32 and body["elapsed_ms"] >= 0
+
+
+def test_id_endpoint_available_when_raw_disabled():
+    with make_id_client(SpecimenEngine(), enable_raw_endpoint=False) as client:
+        assert post_id(client, make_image()).status_code == 200
+
+
+def test_id_endpoint_masks_rrn_when_configured():
+    with make_id_client(SpecimenEngine(), rrn_output="masked") as client:
+        body = post_id(client, make_image((1573, 1000))).json()
+    assert body["fields"]["rrn"] == "800101-2******"
+
+
+def test_id_endpoint_decode_error_is_fail_envelope():
+    with make_id_client(SpecimenEngine()) as client:
+        r = post_id(client, b"not an image")
+    assert r.status_code == 200
+    assert (r.json()["status"], r.json()["fail_reason"]) == ("FAIL", "IMAGE_DECODE_ERROR")
+
+
+def test_id_endpoint_does_not_log_field_values(caplog):
+    with caplog.at_level(logging.DEBUG):
+        with make_id_client(SpecimenEngine()) as client:
+            post_id(client, make_image((1573, 1000)))
+    assert "2345678" not in caplog.text
+    assert "홍길동" not in caplog.text
