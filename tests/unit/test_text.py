@@ -136,3 +136,19 @@ def test_repair_issuer_suffix(raw, fixed, repaired):
 )
 def test_snap_police_issuer(raw, snapped, changed):
     assert T.snap_police_issuer(raw) == (snapped, changed)
+
+
+def test_partially_masked_rrn():
+    (r,) = T.find_rrns("981032-50200XX")
+    assert r.masked and r.formatted() == "981032-5******"
+
+
+@pytest.mark.parametrize(
+    "raw,kinds",
+    [("특수(대형견인,소형견인,구난)", ["1종특수(대형견인)", "1종특수(소형견인)", "1종특수(구난)"]),
+     ("2종보통 2종소형 원동기", ["2종보통", "2종소형", "2종원동기"]),
+     ("1종 대형 보통", ["1종대형", "1종보통"]),  # 종 표기 생략 시 앞의 종을 따름
+     ("대형 보통", [])],
+)
+def test_license_types_real_layout(raw, kinds):
+    assert T.find_license_types(raw) == kinds

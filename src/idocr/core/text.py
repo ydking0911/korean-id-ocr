@@ -43,7 +43,8 @@ def text_after_numbers(text: str) -> str:
 # ── 주민등록번호 ──────────────────────────────────────────
 
 # 앞 6 + (구분자) + 뒤 7. 뒷자리 2~7번째는 가려져 있을 수 있다(*, X, ●, 누락)
-_RRN = re.compile(r"(?<!\d)(\d{6})\s*-?\s*([0-9])([0-9]{6}|[*xX●•]{6}|[*xX●•]{0,6})(?!\d)")
+# 뒷자리 2~7번째는 전부·일부 가려져 있을 수 있다 ('2******', '20200XX', 스티커로 가려 누락)
+_RRN = re.compile(r"(?<!\d)(\d{6})\s*-?\s*([0-9])([0-9]{6}|[0-9*xX●•]{6}|[*xX●•]{0,6})(?!\d)")
 _CENTURY = {"1": 1900, "2": 1900, "5": 1900, "6": 1900, "3": 2000, "4": 2000, "7": 2000, "8": 2000,
             "9": 1800, "0": 1800}
 
@@ -192,7 +193,12 @@ def repair_issuer(issuer: str) -> tuple[str, bool]:
 # 면허 발급 경찰청 (2021년 이전 '○○지방경찰청장', 2016년 이전 경기는 남·북부 분리 전)
 _POLICE_REGIONS = ("서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "경기남부", "경기북부",
                    "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주")
-POLICE_ISSUERS = tuple(f"{r}{j}경찰청장" for r in _POLICE_REGIONS for j in ("", "지방"))
+# 신형 명칭(2021~): '서울특별시경찰청장', '경기도남부경찰청장' 등 (실물 샘플에서 확인)
+_POLICE_FULL = ("서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시", "울산광역시",
+                "세종특별자치시", "경기도남부", "경기도북부", "강원특별자치도", "강원도", "충청북도", "충청남도",
+                "전북특별자치도", "전라북도", "전라남도", "경상북도", "경상남도", "제주특별자치도")
+POLICE_ISSUERS = tuple(f"{r}{j}경찰청장" for r in _POLICE_REGIONS for j in ("", "지방")) + tuple(
+    f"{r}경찰청장" for r in _POLICE_FULL)
 
 
 def snap_police_issuer(issuer: str, min_ratio: float = 0.75) -> tuple[str, bool]:
@@ -201,7 +207,7 @@ def snap_police_issuer(issuer: str, min_ratio: float = 0.75) -> tuple[str, bool]
 
     s = re.sub(r"\s", "", issuer)
     if s in POLICE_ISSUERS:
-        return s, s != issuer
+        return s, False  # 띄어쓰기만 다른 건 보정으로 보지 않음
     best = max(POLICE_ISSUERS, key=lambda c: SequenceMatcher(None, s, c).ratio())
     if SequenceMatcher(None, s, best).ratio() >= min_ratio:
         return best, True
@@ -222,7 +228,8 @@ LICENSE_REGIONS = {
 }
 _REGION_CODE = {name: code for code, name in LICENSE_REGIONS.items()}
 
-_LICENSE_NO = re.compile(r"(?<!\d)(\d{2})\s*-\s*(\d{2})\s*-\s*(\d{6})\s*-\s*(\d{2})(?!\d)")
+_MASK = r"[\dXx*●•]"
+_LICENSE_NO = re.compile(rf"(?<!\d)(\d{{2}})\s*-\s*(\d{{2}})\s*-\s*({_MASK}{{6}})\s*-\s*({_MASK}{{2}})(?![\dXx])")
 # 구형: '서울 19-123456-61' (지역명 + 10자리)
 _LICENSE_NO_OLD = re.compile(r"(" + "|".join(sorted(_REGION_CODE, key=len, reverse=True)) + r")\s*"
                              r"(\d{2})\s*-\s*(\d{6})\s*-\s*(\d{2})(?!\d)")
@@ -236,8 +243,14 @@ class LicenseNo:
     check: str
     region_name_printed: str | None = None  # 구형 표기의 지역명
 
+    @property
+    def masked(self) -> bool:
+        return not (self.serial + self.check).isdigit()
+
     def formatted(self) -> str:
-        return f"{self.region}-{self.year}-{self.serial}-{self.check}"
+        serial = re.sub(r"[^\d]", "X", self.serial)
+        check = re.sub(r"[^\d]", "X", self.check)
+        return f"{self.region}-{self.year}-{serial}-{check}"
 
 
 def find_license_numbers(text: str) -> list[LicenseNo]:
@@ -254,20 +267,31 @@ def license_number_is_valid(no: LicenseNo) -> bool:
     return no.region in LICENSE_REGIONS
 
 
-_LICENSE_TYPE = re.compile(r"([12])\s*종\s*(대\s*형|보\s*통|소\s*형|특\s*수|원\s*동\s*기)"
-                           r"(?:\s*[(（]?\s*(대형견인|소형견인|구난)\s*[)）]?)?")
 LICENSE_TYPES = {"1종대형", "1종보통", "1종소형", "1종특수", "2종보통", "2종소형", "2종원동기"}
 
 
+_KIND = re.compile(r"(?:([12])\s*종\s*)?(대\s*형|보\s*통|소\s*형|특\s*수|원\s*동\s*기)(?:\s*[(（]([^)）]*)[)）])?")
+_SPECIAL = ("대형견인", "소형견인", "구난")
+
+
 def find_license_types(text: str) -> list[str]:
-    """'1종 보통' → ['1종보통']. 특수면허는 '1종특수(대형견인)'."""
-    out = []
-    for m in _LICENSE_TYPE.finditer(text.replace("l", "1").replace("I", "1")):
-        kind = f"{m.group(1)}종{re.sub(r'\s', '', m.group(2))}"
-        if kind == "1종특수" and m.group(3):
-            kind += f"({m.group(3)})"
-        out.append(kind)
-    return out
+    """'1종 보통' → ['1종보통']. 실물처럼 여러 줄·접두사 생략도 처리:
+    '1종대형 1종보통' / '특수(대형견인,소형견인,구난)' → 1종특수(…) 각각 / '원동기' → 2종원동기.
+    종 표기가 없으면 같은 줄 앞의 종을 따른다."""
+    out: list[str] = []
+    last = None
+    for m in _KIND.finditer(text.replace("l", "1").replace("I", "1")):
+        kind = re.sub(r"\s", "", m.group(2))
+        grade = m.group(1) or {"특수": "1", "원동기": "2"}.get(kind) or last
+        if grade is None:
+            continue
+        last = grade
+        if kind == "특수":
+            subs = [x for x in re.split(r"[,·.\s]+", m.group(3) or "") if x in _SPECIAL]
+            out += [f"1종특수({x})" for x in subs] or ["1종특수"]
+        else:
+            out.append(f"{grade}종{kind}")
+    return list(dict.fromkeys(out))
 
 
 def license_type_is_valid(kind: str) -> bool:

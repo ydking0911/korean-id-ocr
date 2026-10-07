@@ -88,6 +88,10 @@ def nearest(token: str, candidates, max_dist: int) -> str | None:
 
 # ── 교정 ────────────────────────────────────────────────
 
+# 실물에 줄임 표기가 쓰인다 (예: 면허증 '서울시 서대문구 통일로'). 값은 그대로 두고 유효로 인정
+SIDO_ALIASES = {"서울시": "서울특별시", "부산시": "부산광역시", "대구시": "대구광역시", "인천시": "인천광역시",
+                "광주시": "광주광역시", "대전시": "대전광역시", "울산시": "울산광역시", "세종시": "세종특별자치시"}
+
 _SPACING = [
     # 세종길115 → 세종길 115 (단 '테헤란로34번길'처럼 숫자 뒤에 번길이 오면 도로명의 일부)
     (re.compile(r"(?<=[로길])(?=\d+(?:-\d+)?(?:\s|$|\())"), " "),
@@ -127,10 +131,14 @@ def correct_address(text: str, lex: Lexicon | None = None) -> Correction:
             return True
         return False
 
-    sido_ok = bool(tokens) and fix(0, lex.sido, 2)
+    if tokens and tokens[0] in SIDO_ALIASES:
+        sido_ok, canonical = True, SIDO_ALIASES[tokens[0]]
+    else:
+        sido_ok = bool(tokens) and fix(0, lex.sido, 2)
+        canonical = tokens[0] if sido_ok else None
     # 시·군·구는 '시·군·구'로 끝나는 토큰만 교정한다 ('중앙로'가 '중앙구'로 바뀌지 않게)
     if sido_ok and len(tokens) > 1 and _looks_like_sgg(tokens[1]):
-        sggs = lex.sgg_of(tokens[0])
+        sggs = lex.sgg_of(canonical)
         if fix(1, sggs, 1) and len(tokens) > 2 and tokens[1].endswith("시") and _looks_like_sgg(tokens[2]):
             fix(2, sggs, 1)  # 일반구가 있는 시: '성남시 분당구'
 
