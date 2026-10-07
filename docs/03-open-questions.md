@@ -25,11 +25,9 @@
 | 미검출 필드 | ✅ | 키 유지, 값 `null` |
 | `field_meta` | ✅ | 기본 응답에 포함 (found·confidence·bbox·valid·accepted) |
 | 이미지 품질 사전 검사 | ✅ | 하지 않음. 경고 없이 OCR 진행 |
-| status 판정 | 🟡 | 신뢰도 임계값 기반 OK/PARTIAL/FAIL(`LOW_CONFIDENCE`) — 05 문서 6절 추천안 |
+| status 판정 | ✅ | OK/PARTIAL/FAIL 3단계, 핵심 필드 주민등록증 `name`·`rrn` (면허증은 + `license_number`), 초기 임계값 숫자 0.90·텍스트 0.85·주소 0.80 |
+| 180° 재시도 | ✅ | 2단계에서 추가 (뒤집힌 사진). 재시도 순서는 첫 결과로 결정 (05 문서 6절) |
 
 ## 남은 질문
 
-### Q1. status 판정 규칙 (05 문서 6절)
-- 단일 임계값으로 바로 FAIL 대신 **OK / PARTIAL / FAIL 3단계**를 유지할지
-- 핵심 필드 정의: 주민등록증 `name`·`rrn`, 운전면허증 `name`·`rrn`·`license_number`
-- 초기 임계값: 숫자 0.90 / 텍스트 0.85 / 주소 0.80 (평가 하네스로 재조정)
+없음 (3단계 진행 중 생기면 추가)

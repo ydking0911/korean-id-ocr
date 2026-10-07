@@ -19,9 +19,14 @@ cp .env.example .env
 docker compose up -d --build
 curl http://127.0.0.1:8000/readyz
 
-# 4. 이미지 → 텍스트 줄 (요청 본문으로 이미지 전송, multipart 아님)
+# 4. 신분증 → 구조화 JSON (요청 본문으로 이미지 전송, multipart 아님)
+curl --data-binary @image.jpg -H "Content-Type: image/jpeg" http://127.0.0.1:8000/v1/ocr/id
+
+# (개발용) 이미지 → 텍스트 줄. IDOCR_ENABLE_RAW_ENDPOINT=true일 때만
 curl --data-binary @image.jpg -H "Content-Type: image/jpeg" http://127.0.0.1:8000/v1/ocr/raw
 ```
+
+지원 문서: 주민등록증 앞면 (운전면허증 앞면은 3단계). 응답 형식은 [`docs/05-output-schema.md`](docs/05-output-schema.md).
 
 ## 로컬 개발
 
@@ -31,7 +36,8 @@ pip install -e ".[dev]"
 python scripts/download_models.py
 
 pytest                       # 단위 테스트 + (모델 있으면) 스모크 테스트
-python -m idocr.cli raw image.jpg
+python -m idocr.cli id image.jpg     # 구조화 결과
+python -m idocr.cli raw image.jpg    # 텍스트 줄
 uvicorn --factory idocr.service.app:create_app --port 8000
 ```
 
@@ -47,6 +53,8 @@ uvicorn --factory idocr.service.app:create_app --port 8000
 | `IDOCR_QUEUE_LIMIT` | 16 | 동시 대기 요청 상한 (초과 시 503 BUSY) |
 | `IDOCR_REQUEST_TIMEOUT_S` | 30 | 초과 시 504 TIMEOUT |
 | `IDOCR_REQUIRE_HANGUL` | true | 인식 모델에 한글이 없으면 기동 거부 (잘못된 모델 로드 방지) |
+| `IDOCR_RRN_OUTPUT` | full | `full` 또는 `masked`(`800101-2******`). 현재 개발용이라 full |
+| `IDOCR_THRESHOLD_NUMERIC` / `_TEXT` / `_ADDRESS` | 0.90 / 0.85 / 0.80 | 필드 채택 신뢰도 임계값 |
 
 ## 개인정보 처리
 
