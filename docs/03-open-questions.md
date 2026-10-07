@@ -22,16 +22,14 @@
 | 참고 레포 벤치마크 | ✅ | 우선순위 낮음(선택). `ocr-ai-module`은 OCR 모델이 없어 대상 아님 (07 문서) |
 | 모델 조합 | ✅ | RapidOCR 공식: v5 mobile det + v5 korean rec + v2 cls. 모델 경로 항상 명시 (01 문서 2절). v6 det small·v5 server det는 비교 후보 |
 | `name_hanja` | ✅ | nullable best-effort |
-| 구조화 스키마 | 🟡 | 05 문서 추천안 v1 — 검토 필요 |
-| 이미지 품질 사전 검사 | 🟡 | 선명도·밝기 기준 미달이면 OCR 생략하고 `IMAGE_TOO_BLURRY` 등 반환 (07 문서) |
+| 미검출 필드 | ✅ | 키 유지, 값 `null` |
+| `field_meta` | ✅ | 기본 응답에 포함 (found·confidence·bbox·valid·accepted) |
+| 이미지 품질 사전 검사 | ✅ | 하지 않음. 경고 없이 OCR 진행 |
+| status 판정 | 🟡 | 신뢰도 임계값 기반 OK/PARTIAL/FAIL(`LOW_CONFIDENCE`) — 05 문서 6절 추천안 |
 
 ## 남은 질문
 
-### Q1. 구조화 스키마 검토 (05 문서)
-필드 목록·키 이름·정규화 형식(날짜 `YYYY-MM-DD` 등)이 원하는 형태인지. 특히:
-- 실패 필드를 `null`로 두고 키는 유지하는 방식
-- `field_meta`(신뢰도·bbox·검증 결과)를 기본 응답에 포함할지
-
-### Q2. 이미지 품질 사전 검사
-흐린 사진을 OCR 전에 거부할지, 일단 OCR을 돌리고 결과로만 판단할지.
-추천: 사전 검사는 **경고만**(`warnings: ["BLURRY"]`) 내고 OCR은 진행 → 임계값을 데이터로 정한 뒤 거부로 전환.
+### Q1. status 판정 규칙 (05 문서 6절)
+- 단일 임계값으로 바로 FAIL 대신 **OK / PARTIAL / FAIL 3단계**를 유지할지
+- 핵심 필드 정의: 주민등록증 `name`·`rrn`, 운전면허증 `name`·`rrn`·`license_number`
+- 초기 임계값: 숫자 0.90 / 텍스트 0.85 / 주소 0.80 (평가 하네스로 재조정)
