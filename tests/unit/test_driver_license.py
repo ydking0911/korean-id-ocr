@@ -72,8 +72,8 @@ def test_contrast_pass_specimen():
         "license_types": ["1종보통"],
         "name": "홍길동",
         "rrn": "800101-2345678",
-        "address": "서울특별시 가산디지털1로 (대륨테크노타운18차) 18차20층",
-        "address_lines": ["서울특별시 가산디지털1로", "(대륨테크노타운18차)", "18차20층"],
+        "address": "서울특별시 가산디지털1로 (대륨테크노타운 18차) 18차 20층",  # 띄어쓰기 복원
+        "address_lines": ["서울특별시 가산디지털1로", "(대륨테크노타운 18차)", "18차 20층"],
         "aptitude_period": {"start": "2024-01-01", "end": "2024-12-31", "kind": "APTITUDE"},
         "issue_date": "2014-11-21",
         "conditions": None,
@@ -185,4 +185,4 @@ def test_address_stops_at_dates_when_label_unreadable():
     # 흐린 사진: '적성검사' 라벨을 못 읽어도 날짜 줄이 주소에 붙지 않아야 한다
     lines = [l for l in LICENSE_CONTRAST if l.text not in ("적성검사", "기", "간")]
     ex = run(lines)
-    assert ex.fields["address_lines"].value == ["서울특별시 가산디지털1로", "(대륨테크노타운18차)", "18차20층"]
+    assert ex.fields["address_lines"].value == ["서울특별시 가산디지털1로", "(대륨테크노타운 18차)", "18차 20층"]

@@ -3,7 +3,9 @@
 from datetime import date
 from typing import Callable
 
+from idocr.config import get_settings
 from idocr.core import text as T
+from idocr.core.address import correct_address, fix_spacing, load_lexicon
 from idocr.core.layout import Line, chars_box, leading_chars, rows, trailing_chars_after, union_box
 from idocr.core.result import FieldValue, Quad
 
@@ -50,8 +52,9 @@ def read_name(line: Line, recognize: Recognizer | None) -> tuple[FieldValue | No
     return name_fv, hanja_fv
 
 
-def read_address(body: list[Line]) -> tuple[FieldValue | None, FieldValue | None]:
-    """주소 영역 줄들 → (주소, 줄 목록). 한 줄이 여러 박스로 쪼개져도 줄 단위로 이어 붙인다."""
+def read_address(body: list[Line], warnings: list[str] | None = None) -> tuple[FieldValue | None, FieldValue | None]:
+    """주소 영역 줄들 → (주소, 줄 목록). 한 줄이 여러 박스로 쪼개져도 줄 단위로 이어 붙인다.
+    띄어쓰기 복원과 행정구역 사전 교정을 거친다 (core/address.py)."""
     # 번지만 있는 줄('154')처럼 한글이 없어도 숫자가 있으면 주소 줄이다
     body = [l for l in body if (T.HANGUL.search(l.text) or any(c.isdigit() for c in l.text))
             and len(l.text.strip()) >= 2]
@@ -60,11 +63,23 @@ def read_address(body: list[Line]) -> tuple[FieldValue | None, FieldValue | None
     grouped = rows(body)
     texts = [" ".join(T.collapse_spaces(l.text) for l in row) for row in grouped]
     texts[0] = T.space_after_sido(texts[0])
-    address = " ".join(texts)
+    texts = [fix_spacing(t) for t in texts]
+
+    corr = correct_address(" ".join(texts), load_lexicon(get_settings().address_lexicon))
+    for old, new in corr.changed:  # 교정한 토큰을 줄 목록에도 반영
+        for i, t in enumerate(texts):
+            toks = t.split(" ")
+            if old in toks:
+                toks[toks.index(old)] = new
+                texts[i] = " ".join(toks)
+                break
+    if corr.changed and warnings is not None:
+        warnings.append("REPAIRED:address")
+
     conf = min(l.score for l in body)
     boxes = [union_box([l.box for l in row]) for row in grouped]
-    valid = T.address_is_valid(address)
-    return FieldValue(address, conf, boxes, valid), FieldValue(texts, conf, boxes, valid)
+    return (FieldValue(corr.text, conf, boxes, corr.valid),
+            FieldValue(texts, conf, boxes, corr.valid))
 
 
 def read_issuer(lines: list[Line], date_line: Line, warnings: list[str]) -> FieldValue | None:

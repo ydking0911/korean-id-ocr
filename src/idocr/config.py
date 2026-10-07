@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     threshold_text: float = 0.85
     threshold_address: float = 0.80
 
+    # 주소 교정용 추가 사전 (도로명·건물명, 공백·줄바꿈 구분 단어 목록). 없으면 행정구역 사전만 사용
+    address_lexicon: str | None = None
+
     log_level: str = "INFO"
 
     def model_path(self, name: str) -> Path:

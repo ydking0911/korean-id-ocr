@@ -49,7 +49,7 @@ def extract(lines: list[Line], title: Line | None, recognize: Recognizer | None 
     stops = [l for l in (label, first_dated, date_line) if l is not None]
     stop = min(stops, key=lambda l: l.cy) if stops else None
     body = [l for l in lines if l.is_below(rrn_line) and in_column(l) and (stop is None or l.is_above(stop))]
-    fields["address"], fields["address_lines"] = read_address(body)
+    fields["address"], fields["address_lines"] = read_address(body, warnings)
 
     if date_line is not None:
         issuer = read_issuer(lines, date_line, warnings)
