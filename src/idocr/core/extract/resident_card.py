@@ -41,7 +41,7 @@ def extract(lines: list[Line], title: Line | None, recognize: Recognizer | None 
     body = [l for l in lines
             if l.is_below(rrn_line) and l.x0 < rrn_line.x1 and l is not date_line
             and (date_line is None or l.is_above(date_line))]
-    fields["address"], fields["address_lines"] = read_address(body)
+    fields["address"], fields["address_lines"] = read_address(body, warnings)
 
     if date_line is not None:
         fields["issuer"] = read_issuer(lines, date_line, warnings)

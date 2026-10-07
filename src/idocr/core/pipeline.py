@@ -4,14 +4,14 @@
 시도 순서는 첫 결과로 정한다: 문서를 못 알아보면 회전 먼저, 제목이 아래쪽에 있으면(뒤집힘) 180° 먼저.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Callable
 
 import cv2
 import numpy as np
 
-from idocr.core import judge
+from idocr.core import authenticity, judge
 from idocr.core.classify import classify
 from idocr.core.extract import driver_license, resident_card
 from idocr.core.layout import to_lines
@@ -37,7 +37,8 @@ def _retry_order(first: "_Attempt") -> tuple[Pass, ...]:
     if first.vertical:
         return (ROT90, ROT270, CONTRAST, ROT180)
     if first.doc_type == DocumentType.UNKNOWN:
-        return (ROT90, ROT270, ROT180, CONTRAST)
+        # 세로로 눕지 않았는데 문서를 못 알아봄 → 뒤집힌 사진일 가능성이 가장 큼
+        return (ROT180, ROT90, ROT270, CONTRAST)
     if first.title_low:
         return (ROT180, CONTRAST, ROT90, ROT270)
     return (CONTRAST, ROT90, ROT270, ROT180)
@@ -58,11 +59,13 @@ class _Attempt:
     inverse: Callable[[Quad], Quad]
     title_low: bool = False  # 제목이 줄들의 아래쪽 절반에 있음 → 뒤집힌 사진 신호
     vertical: bool = False  # 박스 대부분이 세로로 김 → 90°/270° 누운 사진 신호
+    text_boxes: list = field(default_factory=list)  # 이 패스 좌표계의 글자 박스 (위조 의심 신호용)
 
 
 def analyze(prepared: PreparedImage, engine, thresholds: judge.Thresholds,
-            mask_rrn: bool = False, today: date | None = None) -> IdDocumentResult:
-    first = best = _run_pass(prepared.bgr, ORIGINAL, engine, today)
+            mask_rrn: bool = False, today: date | None = None, strict_checksum: bool = False,
+            document_checks: bool = False) -> IdDocumentResult:
+    first = best = _run_pass(prepared.bgr, ORIGINAL, engine, today, strict_checksum)
     passes_run = 1
     for p in _retry_order(first):
         if best.extraction is not None:
@@ -71,7 +74,7 @@ def analyze(prepared: PreparedImage, engine, thresholds: judge.Thresholds,
         elif best.doc_type != DocumentType.UNKNOWN:
             break  # 문서 종류는 알아냈지만 추출기가 없음 → 재시도해도 결과가 같다
         passes_run += 1
-        attempt = _run_pass(prepared.bgr, p, engine, today)
+        attempt = _run_pass(prepared.bgr, p, engine, today, strict_checksum)
         if _rank(attempt, thresholds) > _rank(best, thresholds):
             best = attempt
 
@@ -92,7 +95,24 @@ def analyze(prepared: PreparedImage, engine, thresholds: judge.Thresholds,
     def to_original(q: Quad) -> Quad:
         return [[round(x * inv_scale, 1), round(y * inv_scale, 1)] for x, y in best.inverse(q)]
 
-    return judge.assemble(best.extraction, thresholds, to_original, preprocess, mask_rrn=mask_rrn)
+    result = judge.assemble(best.extraction, thresholds, to_original, preprocess, mask_rrn=mask_rrn)
+    if document_checks:
+        result.document_checks = _document_checks(prepared, best, engine)
+    return result
+
+
+def _document_checks(prepared: PreparedImage, best: "_Attempt", engine) -> dict:
+    img, _ = rotate(prepared.bgr, best.pass_.rotation)
+    detector = getattr(engine, "faces", None)
+    faces = detector.detect(img) if detector is not None else []
+    rrn = best.extraction.fields.get("rrn")
+    checks = authenticity.run(img, best.doc_type, rrn.boxes[0] if rrn and rrn.boxes else None,
+                              best.text_boxes, faces)
+    if detector is None:
+        checks.face = None
+        checks.reasons = [r for r in checks.reasons if r != "NO_FACE_IN_PHOTO_AREA"]
+        checks.inconclusive = [r for r in checks.inconclusive if r != "FACE_NOT_CHECKED"]
+    return checks.to_dict()
 
 
 def _rank(a: _Attempt, th: judge.Thresholds) -> tuple:
@@ -102,7 +122,7 @@ def _rank(a: _Attempt, th: judge.Thresholds) -> tuple:
     return base + (a.doc_type != DocumentType.UNKNOWN,)
 
 
-def _run_pass(bgr: np.ndarray, p: Pass, engine, today) -> _Attempt:
+def _run_pass(bgr: np.ndarray, p: Pass, engine, today, strict_checksum: bool = False) -> _Attempt:
     img = enhance_contrast(bgr) if p.contrast else bgr
     img, inverse = rotate(img, p.rotation)
     lines = to_lines(engine.run(img))
@@ -114,10 +134,13 @@ def _run_pass(bgr: np.ndarray, p: Pass, engine, today) -> _Attempt:
 
     extractor = EXTRACTORS.get(doc_type)
     extraction = extractor(lines, title, recognize, today) if extractor else None
+    if strict_checksum and extraction and "CHECKSUM_MISMATCH:rrn" in extraction.warnings:
+        extraction.fields["rrn"].valid = False  # 재시도 패스에서 검증번호가 맞는 결과를 찾게 된다
     title_low = title is not None and len(lines) >= 3 and title.cy > sorted(l.cy for l in lines)[len(lines) // 2]
     long_boxes = [l for l in lines if len(l.text) >= 3]
     vertical = bool(long_boxes) and sum(l.h > 1.5 * (l.x1 - l.x0) for l in long_boxes) > len(long_boxes) / 2
-    return _Attempt(p, doc_type, extraction, len(lines), inverse, title_low, vertical)
+    return _Attempt(p, doc_type, extraction, len(lines), inverse, title_low, vertical,
+                    text_boxes=[l.box for l in lines])
 
 
 def enhance_contrast(bgr: np.ndarray) -> np.ndarray:

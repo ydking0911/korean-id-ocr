@@ -35,6 +35,7 @@ class FieldValue:
     confidence: float
     boxes: list[Quad] = field(default_factory=list)
     valid: bool = True
+    verified: bool = False  # 값 자체의 검증 장치로 확인됨 (주민번호 검증번호 일치) → 낮은 임계값 적용
 
 
 @dataclass
@@ -55,6 +56,7 @@ class IdDocumentResult:
     warnings: list[str]
     fail_reason: FailReason | None
     preprocess: dict[str, Any]
+    document_checks: dict[str, Any] | None = None  # 위조 의심 신호 (판정과 무관한 참고값)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -67,4 +69,5 @@ class IdDocumentResult:
             "warnings": self.warnings,
             "fail_reason": self.fail_reason.value if self.fail_reason else None,
             "preprocess": self.preprocess,
+            "document_checks": self.document_checks,
         }

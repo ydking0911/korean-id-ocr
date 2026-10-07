@@ -4,6 +4,7 @@
 적성검사(갱신)기간 시작 / '기 간 : ~ 종료' / 발급일 + 발급기관(한 줄). 큰 사진은 왼쪽, 작은 사진과 보안코드는 오른쪽.
 """
 
+import re
 from datetime import date
 
 from idocr.core import text as T
@@ -26,7 +27,7 @@ def extract(lines: list[Line], title: Line | None, recognize: Recognizer | None 
     if rrn is not None and fields["rrn"].valid:
         derived.update(T.rrn_derived(rrn))
     lic_line = _find_license_number(lines, fields, warnings, derived)
-    _find_license_types(lines, lic_line or rrn_line, fields)
+    _find_license_types(lines, lic_line or rrn_line, rrn_line, fields)
 
     if rrn_line is None:
         return Extraction(DocumentType.DRIVER_LICENSE, fields, warnings, derived)
@@ -43,17 +44,27 @@ def extract(lines: list[Line], title: Line | None, recognize: Recognizer | None 
     period_lines, label = _find_aptitude_period(lines, rrn_line, in_column, fields, derived, today)
     date_line = _find_issue_date(lines, rrn_line, period_lines, fields, rrn, today)
 
-    stop = label or (period_lines[0] if period_lines else None) or date_line
+    # 주소는 적성검사 라벨·날짜 줄 전까지. 라벨을 못 읽어도(흐린 사진) 첫 날짜 줄에서 끊는다
+    first_dated = next((l for l in sorted(lines, key=lambda l: l.cy)
+                        if l.is_below(rrn_line) and in_column(l) and T.find_dates(l.text)), None)
+    stops = [l for l in (label, first_dated, date_line) if l is not None]
+    stop = min(stops, key=lambda l: l.cy) if stops else None
     body = [l for l in lines if l.is_below(rrn_line) and in_column(l) and (stop is None or l.is_above(stop))]
-    fields["address"], fields["address_lines"] = read_address(body)
+    fields["address"], fields["address_lines"] = read_address(body, warnings)
 
     if date_line is not None:
         issuer = read_issuer(lines, date_line, warnings)
         if issuer is not None:
-            issuer.valid = issuer.valid and "경찰" in issuer.value
+            snapped, changed = T.snap_police_issuer(issuer.value)
+            if snapped in T.POLICE_ISSUERS:
+                issuer.value = snapped  # 띄어쓰기도 표준 표기로
+            if changed and "REPAIRED:issuer" not in warnings:
+                warnings.append("REPAIRED:issuer")
+            issuer.valid = issuer.value in T.POLICE_ISSUERS
         fields["issuer"] = issuer
 
-    _find_serial_code(lines, rrn_line, fields)
+    _find_serial_code(lines, rrn_line, date_line, fields, warnings, derived)
+    _find_conditions(lines, rrn_line, fields)
     return Extraction(DocumentType.DRIVER_LICENSE, fields, warnings, derived)
 
 
@@ -67,6 +78,8 @@ def _find_license_number(lines, fields, warnings, derived):
         warnings.append("AMBIGUOUS:license_number")
     valid = T.license_number_is_valid(no) and len(distinct) == 1
     fields["license_number"] = FieldValue(no.formatted(), line.score, [line.box], valid)
+    if no.masked:
+        warnings.append("MASKED:license_number")
     if no.region_name_printed:
         fields["license_region"] = FieldValue(no.region_name_printed, line.score, [line.box], True)
     if no.region in T.LICENSE_REGIONS:
@@ -74,9 +87,10 @@ def _find_license_number(lines, fields, warnings, derived):
     return line
 
 
-def _find_license_types(lines, anchor, fields):
-    # 면허종류는 카드 위쪽(면허번호 줄보다 위)에 있다
-    region = [l for l in lines if anchor is None or l.is_above(anchor)]
+def _find_license_types(lines, anchor, rrn_line, fields):
+    # 면허종류는 좌상단. 실물은 여러 줄이라 마지막 줄이 면허번호와 같은 높이일 수 있다 → 면허번호보다 위 또는 왼쪽
+    region = [l for l in lines
+              if anchor is None or l.is_above(anchor) or (l.x1 <= anchor.x0 and (rrn_line is None or l.is_above(rrn_line)))]
     hits = [(l, k) for l in region for k in T.find_license_types(l.text)]
     if not hits:
         return
@@ -133,10 +147,35 @@ def _find_issue_date(lines, rrn_line, period_lines, fields, rrn, today):
     return line
 
 
-def _find_serial_code(lines, rrn_line, fields):
-    # 오른쪽 작은 사진 아래. 본문 열보다 오른쪽에 있는 것을 우선
-    cands = [(l, c) for l in lines if l.is_below(rrn_line) for c in [T.find_serial_code(l.text)] if c]
+# '조 건 : A'. 작은 사진에서는 '건'이 빠지거나 ':'가 붙어 읽히기도 한다 ('조', 'RP모')
+_CONDITION = re.compile(r"^조\s*(?:건)?\s*[:：;]?\s*(.+)$")
+
+
+def _find_conditions(lines, rrn_line, fields):
+    """'조 건 : A' 줄 (적성검사 기간 아래). 라벨·값이 여러 박스로 쪼개져도 같은 줄로 묶어 읽는다.
+    라벨이 없으면 null (조건 없는 면허증과 못 읽은 경우를 구분할 수 없음)."""
+    # 같은 높이 오른쪽의 보안코드(작은 사진 아래)가 섞이지 않게 본문 열만
+    for row in rows([l for l in lines if l.is_below(rrn_line) and l.x0 < rrn_line.x1]):
+        text = " ".join(l.text for l in sorted(row, key=lambda l: l.x0)).strip()
+        m = _CONDITION.search(text)
+        if m and len(m.group(1)) <= 12:
+            codes = [c for c in re.split(r"[,·\s]+", m.group(1)) if c]
+            fields["conditions"] = FieldValue(codes, min(l.score for l in row),
+                                              [union_box([l.box for l in row])], True)
+            return
+
+
+def _find_serial_code(lines, rrn_line, date_line, fields, warnings, derived):
+    # 오른쪽 작은 사진 아래, 본문 열보다 오른쪽, 발급일 줄보다 위 (아래쪽 직인 노이즈 배제)
+    cands = [(l, c) for l in lines
+             if l.is_below(rrn_line) and (l.x0 + l.x1) / 2 > rrn_line.x1 and (date_line is None or l.is_above(date_line))
+             for c in [T.find_serial_code(l.text)] if c]
     if not cands:
         return
     line, code = max(cands, key=lambda c: c[0].x0)
     fields["serial_code"] = FieldValue(code, line.score, [line.box], True)
+    if T.has_lookalike(code):
+        warnings.append("LOOKALIKE:serial_code")
+        alts = T.serial_alternatives(code)
+        if alts:
+            derived["serial_code_alternatives"] = alts

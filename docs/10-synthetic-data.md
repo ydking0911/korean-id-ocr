@@ -53,7 +53,29 @@ samples/synthetic/<조건>/<id>.jpg + <id>.gt.json                    ← gitign
 - 견본 이미지 자체의 저작권 확인 필요 (출처가 공공기관 견본이면 출처 표기).
 - 시드 고정으로 재현 가능하게. 평가셋과 개발 중 확인용 셋은 시드를 분리.
 
-## 4. 준비물 (사용자)
+## 4. 구현 (4단계)
 
-- [ ] 파란 박스 **없는** 견본 원본 이미지 2장 (주민등록증, 운전면허증) → `samples/specimen/`
-- [ ] (선택) 신분증과 비슷한 폰트 후보 — 없으면 나눔/본고딕·명조 계열로 시작
+```bash
+python -m tools.synth.assets                # 폰트 6종(OFL) 다운로드 + SHA256 검증 → samples/fonts
+python -m tools.synth.template              # 견본 → 빈 템플릿 + 직인 레이어 → samples/synth/templates
+python -m tools.synth.generate --per-condition 15 --seed 1    # → samples/synthetic (300장)
+python -m tools.evaluate --data samples/synthetic --specimen   # → samples/eval/latest/report.md
+```
+
+| 모듈 | 역할 |
+|---|---|
+| `tools/synth/layouts.py` | 필드별 지울 영역·그릴 위치·직인 영역 (견본 OCR 박스 기준 좌표) |
+| `tools/synth/template.py` | `cv2.inpaint`로 글자 제거, 직인 붉은 픽셀은 알파 레이어로 분리해 나중에 글자 위에 다시 얹음 |
+| `tools/synth/values.py` | 정합성 있는 가짜 값 (주소↔발급기관, 생년월일↔발급일, 지역코드↔경찰청, 2021년 전후 '지방' 명칭) |
+| `tools/synth/render.py` | 카드마다 폰트 랜덤(나눔고딕·나눔명조·고딕A1·Noto Sans/Serif KR 등), 한자는 Noto 계열, 주소 자동 줄바꿈 |
+| `tools/synth/augment.py` | 조건 10종: clean · angle(원근) · rotated(90/180/270) · bright · dark(+그림자) · blur · jpeg(q18~35) · glare(반사광) · background · small |
+| `tools/evaluate.py` | 필드별 정확도(완전 일치·공백 무시)·CER·채택 정밀도·오채택, 조건별 성능, 신뢰도 임계값 추천 |
+
+- 주민번호 뒷자리를 가린 카드(`800101-2******`)가 10% 섞인다.
+- 생성기 값이 추출기 검증 규칙을 통과하는지 단위 테스트로 고정 (`tests/unit/test_synth_values.py`).
+- 개발용 세트는 시드 1, 최종 확인용(홀드아웃)은 다른 시드로 따로 만든다.
+
+## 5. 준비물 (사용자)
+
+- [x] 파란 박스 **없는** 견본 원본 이미지 2장 (주민등록증, 운전면허증) → `samples/specimen/`
+- [x] 폰트: 나눔/고딕A1/Noto 계열 OFL 폰트로 시작 (실물 서체에 더 가까운 폰트가 있으면 추가)

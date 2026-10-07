@@ -3,7 +3,7 @@ import pytest
 from idocr.ocr.preprocess import ImageDecodeError, prepare
 from tests.conftest import make_image
 
-LIMITS = dict(max_side_len=2000, max_pixels=40_000_000)
+LIMITS = dict(max_side_len=2000, max_pixels=40_000_000, min_side_len=0)
 
 
 def test_decodes_to_bgr_without_resize():
@@ -45,3 +45,10 @@ def test_decode_error_message_has_no_content():
     with pytest.raises(ImageDecodeError) as exc:
         prepare(b"900101-1234567", **LIMITS)
     assert "1234567" not in str(exc.value)
+
+
+def test_upscales_small_images():
+    p = prepare(make_image((232, 153)), max_side_len=2000, max_pixels=40_000_000, min_side_len=1000)
+    assert p.bgr.shape[:2] == (659, 1000)
+    assert p.scale == pytest.approx(1000 / 232)
+    assert p.original_size == (232, 153)

@@ -72,8 +72,8 @@ def test_contrast_pass_specimen():
         "license_types": ["1종보통"],
         "name": "홍길동",
         "rrn": "800101-2345678",
-        "address": "서울특별시 가산디지털1로 (대륨테크노타운18차) 18차20층",
-        "address_lines": ["서울특별시 가산디지털1로", "(대륨테크노타운18차)", "18차20층"],
+        "address": "서울특별시 가산디지털1로 (대륨테크노타운 18차) 18차 20층",  # 띄어쓰기 복원
+        "address_lines": ["서울특별시 가산디지털1로", "(대륨테크노타운 18차)", "18차 20층"],
         "aptitude_period": {"start": "2024-01-01", "end": "2024-12-31", "kind": "APTITUDE"},
         "issue_date": "2014-11-21",
         "conditions": None,
@@ -84,7 +84,7 @@ def test_contrast_pass_specimen():
     }
     assert ex.derived == {"birth_date": "1980-01-01", "sex": "F", "is_foreign_resident": False,
                           "license_region_name": "서울", "is_expired": True}
-    assert ex.warnings == ["REPAIRED:issuer"]
+    assert ex.warnings == ["CHECKSUM_MISMATCH:rrn", "REPAIRED:issuer"]  # 견본 번호는 가짜
     assert decide(ex, LICENSE_SPEC, Thresholds()) == (Status.OK, None)
 
 
@@ -93,7 +93,7 @@ def test_original_pass_low_address_gives_partial():
     v = values(ex)
     assert v["aptitude_period"] == {"start": "2024-01-01", "end": "2024-12-31", "kind": "APTITUDE"}
     assert v["issue_date"] == "2014-11-21" and v["issuer"] == "서울지방경찰청장"
-    assert v["serial_code"] == "NV676V"  # 'SAA' 노이즈는 숫자가 없어 제외
+    assert v["serial_code"] == "NV676V"  # 'SAA' 노이즈는 6자리가 아니라 제외
     assert ex.fields["address"].confidence == 0.66
     assert decide(ex, LICENSE_SPEC, Thresholds()) == (Status.PARTIAL, None)
 
@@ -160,6 +160,99 @@ def test_find_license_types(raw, expected):
     assert T.find_license_types(raw) == expected
 
 
-@pytest.mark.parametrize("raw,code", [("NV676V", "NV676V"), ("nv676v", "NV676V"), ("SAA", None), ("123456", None)])
+@pytest.mark.parametrize("raw,code", [("NV676V", "NV676V"), ("NV676 V", "NV676V"), ("ABCDEF", "ABCDEF"),
+                                      ("123456", "123456"), ("oioisu", None), ("SAA", None), ("ABCDEFG", None)])
 def test_find_serial_code(raw, code):
     assert T.find_serial_code(raw) == code
+
+
+def test_address_line_with_only_house_number_is_kept():
+    lines = [l for l in LICENSE_CONTRAST if "대륨" not in l.text and "18차20층" not in l.text]
+    lines.insert(7, line("154", 600, 472, 700, 550, 0.99))
+    ex = run(lines)
+    assert ex.fields["address_lines"].value == ["서울특별시 가산디지털1로", "154"]
+
+
+def test_police_issuer_snapped_to_closed_set():
+    lines = [line("2014.11.21.경기남부지방경칠", 601, 836, 1368, 921, 0.95) if "경찰" in l.text else l
+             for l in LICENSE_CONTRAST]
+    ex = run(lines)
+    assert ex.fields["issuer"].value == "경기남부지방경찰청장"
+    assert ex.fields["issuer"].valid
+    assert ex.warnings.count("REPAIRED:issuer") == 1
+
+
+def test_address_stops_at_dates_when_label_unreadable():
+    # 흐린 사진: '적성검사' 라벨을 못 읽어도 날짜 줄이 주소에 붙지 않아야 한다
+    lines = [l for l in LICENSE_CONTRAST if l.text not in ("적성검사", "기", "간")]
+    ex = run(lines)
+    assert ex.fields["address_lines"].value == ["서울특별시 가산디지털1로", "(대륨테크노타운 18차)", "18차 20층"]
+
+
+# 실물 샘플(2019년 발급 면허증) 배치: 면허종류 여러 줄, '조 건 : A', 줄임 주소 '서울시'
+REAL_LAYOUT = [
+    line("1종대형 1종보통 1종소형", 10, 10, 190, 30, 0.97),
+    line("특수(대형견인,소형견인,구난)", 10, 40, 195, 60, 0.95),
+    line("2종보통 2종소형 원동기", 10, 70, 180, 90, 0.96),
+    line("자동차운전면허증(Driver's License)", 210, 30, 460, 52, 0.98),
+    line("21-19-174133-01", 195, 60, 430, 90, 0.99),
+    line("홍길순", 195, 95, 260, 115, 0.99),
+    line("000829-4134567", 195, 115, 330, 135, 0.99),
+    line("서울시 서대문구 통일로", 195, 140, 360, 158, 0.97),
+    line("97 (미근동 209)", 195, 160, 320, 178, 0.96),
+    line("적성검사", 195, 205, 255, 222, 0.99),
+    line("2029.01.01.", 285, 205, 360, 222, 0.99),
+    line("기 간:", 195, 225, 255, 242, 0.95),
+    line("~ 2029.12.31.", 285, 225, 365, 242, 0.99),
+    line("조 건:", 195, 245, 255, 262, 0.97),
+    line("A", 285, 245, 300, 262, 0.98),
+    line("8H1X3Y", 410, 245, 480, 262, 0.99),
+    line("2019.09.10.서울지방경찰청장", 185, 285, 470, 312, 0.98),
+]
+
+
+def test_real_layout_sample():
+    ex = run(REAL_LAYOUT)
+    v = values(ex)
+    assert v["license_types"] == ["1종대형", "1종보통", "1종소형", "1종특수(대형견인)", "1종특수(소형견인)",
+                                  "1종특수(구난)", "2종보통", "2종소형", "2종원동기"]
+    assert v["conditions"] == ["A"]
+    assert v["address"] == "서울시 서대문구 통일로 97 (미근동 209)"
+    assert ex.fields["address"].valid  # '서울시' 줄임 표기 인정
+    assert v["aptitude_period"] == {"start": "2029-01-01", "end": "2029-12-31", "kind": "APTITUDE"}
+    assert v["serial_code"] == "8H1X3Y"
+    assert v["issue_date"] == "2019-09-10" and v["issuer"] == "서울지방경찰청장"
+    assert decide(ex, LICENSE_SPEC, Thresholds()) == (Status.OK, None)
+
+
+def test_masked_license_number_and_new_police_name():
+    lines = [line("17-10-01XXXX-00", 605, 154, 1333, 245, 0.97) if "003456" in l.text else
+             line("2022.03.30. 서울특별시 경찰청장", 601, 836, 1368, 921, 0.98) if "경찰" in l.text else l
+             for l in LICENSE_CONTRAST]
+    ex = run(lines)
+    assert ex.fields["license_number"].value == "17-10-01XXXX-00"
+    assert "MASKED:license_number" in ex.warnings
+    assert ex.fields["issuer"].value == "서울특별시경찰청장" and ex.fields["issuer"].valid
+
+
+def test_no_condition_label_gives_null():
+    assert run(LICENSE_CONTRAST).fields["conditions"] is None
+
+
+def test_serial_code_lookalikes_give_warning_and_alternatives():
+    lines = [line("H0KMIA", 1316, 730, 1480, 774, 0.99) if l.text == "NV676V" else l for l in LICENSE_CONTRAST]
+    ex = run(lines)
+    assert ex.fields["serial_code"].value == "H0KMIA"  # 읽은 그대로 (O·I도 실제로 쓰인다)
+    assert "LOOKALIKE:serial_code" in ex.warnings
+    alts = ex.derived["serial_code_alternatives"]
+    assert sorted(alts) == sorted(["HOKMIA", "HQKMIA", "H0KM1A", "HOKM1A", "HQKM1A"])
+
+
+def test_serial_code_noise_below_issue_date_ignored():
+    lines = [l for l in LICENSE_CONTRAST if l.text != "NV676V"] + [line("OIOLSU", 1316, 930, 1480, 974, 0.6)]
+    assert run(lines).fields["serial_code"] is None
+
+
+def test_serial_alternatives_capped():
+    assert T.serial_alternatives("000000") == []  # 3^6 후보는 너무 많음
+    assert T.serial_alternatives("NV676V") == []

@@ -29,7 +29,7 @@ LICENSE_SPEC = DocSpec(
     core=("name", "rrn", "license_number"),
     kinds={"license_number": "numeric", "license_types": "text", "name": "text", "rrn": "numeric",
            "address": "address", "address_lines": "address", "aptitude_period": "numeric",
-           "issue_date": "numeric", "serial_code": "numeric", "issuer": "text"},
+           "issue_date": "numeric", "serial_code": "numeric", "issuer": "text", "conditions": "text"},
 )
 
 SPECS = {DocumentType.RESIDENT_CARD: RESIDENT_SPEC, DocumentType.DRIVER_LICENSE: LICENSE_SPEC}
@@ -40,6 +40,8 @@ class Thresholds:
     numeric: float = 0.90
     text: float = 0.85
     address: float = 0.80
+    # 검증번호가 맞는 주민번호: 한 자리 오인식은 약 98%가 검증번호 불일치로 드러나므로 낮춰도 안전하다
+    verified: float = 0.60
 
     def for_kind(self, kind: str | None) -> float | None:
         return getattr(self, kind) if kind else None
@@ -50,6 +52,8 @@ def accepted_fields(ex: Extraction, spec: DocSpec, th: Thresholds) -> set[str]:
     for key in spec.fields:
         fv = ex.fields.get(key)
         limit = th.for_kind(spec.kinds.get(key))
+        if fv is not None and fv.verified and limit is not None:
+            limit = min(limit, th.verified)
         if fv is not None and fv.valid and (limit is None or fv.confidence >= limit):
             out.add(key)
     return out

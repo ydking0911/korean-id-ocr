@@ -21,11 +21,13 @@ class ImageDecodeError(Exception):
 class PreparedImage:
     bgr: np.ndarray
     original_size: tuple[int, int]  # (w, h), EXIF 회전 적용 후
-    scale: float  # 원본 대비 축소 비율 (1.0 = 축소 없음)
+    scale: float  # 원본 대비 배율 (1.0 = 그대로, <1 축소, >1 작은 사진 확대)
     exif_rotated: bool
 
 
-def prepare(data: bytes, *, max_side_len: int, max_pixels: int) -> PreparedImage:
+def prepare(data: bytes, *, max_side_len: int, max_pixels: int, min_side_len: int = 1000) -> PreparedImage:
+    """min_side_len: 긴 변이 이보다 작으면 확대한다. 작은 사진(예: 230px)은 글자 높이가 10px 남짓이라
+    인식 모델 입력(높이 48px)으로 늘릴 때 정보가 부족해 오인식이 잦다."""
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
@@ -52,6 +54,9 @@ def prepare(data: bytes, *, max_side_len: int, max_pixels: int) -> PreparedImage
     if long_side > max_side_len:
         scale = max_side_len / long_side
         img = img.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.Resampling.LANCZOS)
+    elif long_side < min_side_len:
+        scale = min_side_len / long_side
+        img = img.resize((round(w * scale), round(h * scale)), Image.Resampling.BICUBIC)
 
     rgb = np.asarray(img)
     bgr = np.ascontiguousarray(rgb[:, :, ::-1])

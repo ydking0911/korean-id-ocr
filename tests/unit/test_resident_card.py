@@ -65,7 +65,7 @@ def test_specimen_with_name_recrop():
         "issuer": "서울특별시 금천구청장",
     }
     assert ex.derived == {"birth_date": "1980-01-01", "sex": "F", "is_foreign_resident": False}
-    assert ex.warnings == []
+    assert ex.warnings == ["CHECKSUM_MISMATCH:rrn"]  # 견본 번호는 가짜라 검증번호가 안 맞는다
     # 재인식 영역은 한글 3글자(155~405) 주변만, 한자 영역(~776)은 포함하지 않음
     (crop,) = calls
     assert crop[0][0] < 155 and 405 < crop[1][0] < 500
@@ -193,3 +193,106 @@ def test_address_row_split_into_boxes_is_joined():
     ]
     ex = run(lines, lambda q: ("홍길동", 0.95))
     assert ex.fields["address_lines"].value == ["서울특별시 가산디지털1로", "(대륭테크노타운 18차)"]
+
+
+# 실물 샘플(2019년 발급, 1280x720): 주소 4줄(괄호가 줄을 넘어감), 좌하단 고스트 이미지의 생년월일 '820701'
+REAL_RESIDENT = [
+    line("주민등록증", 160, 40, 630, 110, 0.99),
+    line("홍길동(洪吉童)", 140, 175, 600, 240, 0.95, chars=[("홍", 145, 200), ("길", 205, 262), ("동", 268, 320)]),
+    line("820701-2345678", 120, 280, 620, 330, 0.99),
+    line("서울특별시 종로구", 85, 385, 470, 425, 0.97),
+    line("은천로 93, 1203동 1204호", 85, 430, 680, 470, 0.95),
+    line("(봉천동, 진달래아파트", 85, 475, 555, 515, 0.94),
+    line("101동 2301호)", 85, 520, 420, 560, 0.95),
+    line("820701", 75, 595, 185, 625, 0.90),
+    line("2019.11.28.", 440, 585, 720, 630, 0.99),
+    line("행복특별시 행복구청장", 300, 640, 880, 695, 0.97),
+]
+
+
+def test_real_resident_layout():
+    ex = run(REAL_RESIDENT, lambda q: ("홍길동", 0.96))
+    v = values(ex)
+    assert v["name"] == "홍길동"
+    assert v["rrn"] == "820701-2345678"
+    assert v["address_lines"] == ["서울특별시 종로구", "은천로 93, 1203동 1204호", "(봉천동, 진달래아파트", "101동 2301호)"]
+    assert v["issue_date"] == "2019-11-28"
+    assert v["issuer"] == "행복특별시 행복구청장"
+
+
+# 같은 실물 샘플을 모델이 실제로 읽은 결과: 주민번호 박스 분리, 시·도 깨짐, 오른쪽 직인 노이즈가 발급일과 같은 줄
+REAL_RESIDENT_OCR = [
+    line("주민등록증", 149, 14, 630, 90, 0.989),
+    line("홍길동", 130, 161, 330, 230, 0.888),
+    line("820701", 119, 270, 340, 330, 0.999),
+    line("2345678", 367, 274, 640, 334, 0.999),
+    line("성울병신 종로구", 78, 365, 470, 410, 0.787),
+    line("은전로 9371203동1204호", 85, 415, 680, 450, 0.859),
+    line("(봉전동,진달래아파트", 81, 452, 555, 495, 0.923),
+    line("101 23013)", 80, 500, 420, 540, 0.893),
+    line("2019.1 28", 431, 573, 720, 620, 0.86),
+    line("영록특별시", 907, 567, 1150, 615, 0.747),
+    line("행복특별시", 293, 627, 580, 690, 0.999),
+    line("행복구청장", 599, 626, 889, 703, 0.998),
+    line("O보그자", 928, 653, 1100, 700, 0.587),
+]
+
+
+def test_real_resident_ocr_output():
+    v = values(run(REAL_RESIDENT_OCR, lambda q: ("홍길동", 0.96)))
+    assert v["rrn"] == "820701-2345678"
+    assert v["address_lines"][0] == "서울특별시 종로구"  # 유일한 '종로구'로 시·도 역추론
+    assert v["issue_date"] == "2019-01-28"
+    assert v["issuer"] == "행복특별시 행복구청장"  # 같은 줄 직인 노이즈보다 접미사가 맞는 아래 줄
+
+
+def test_ghost_birth_digits_not_prefixed_to_issuer():
+    lines = [l for l in SPECIMEN if "구청장" not in l.text] + [
+        line("800101", 120, 820, 300, 880, 0.99),
+        line("서울특별시 금천구청장", 311, 801, 1316, 905, 0.968),
+    ]
+    assert run(lines, lambda q: ("홍길동", 0.95)).fields["issuer"].value == "서울특별시 금천구청장"
+
+
+def _valid_rrn(front: str, gender: str, body: str) -> str:
+    d = [int(c) for c in front + gender + body]
+    check = (11 - sum(w * x for w, x in zip((2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5), d)) % 11) % 10
+    return f"{front}-{gender}{body}{check}"
+
+
+def test_checksum_ok_gives_no_warning():
+    rrn = _valid_rrn("800101", "2", "34567")
+    lines = [line(rrn, 145, 385, 772, 460, 0.999) if "-" in l.text else l for l in SPECIMEN]
+    ex = run(lines, lambda q: ("홍길동", 0.95))
+    assert ex.fields["rrn"].value == rrn and "CHECKSUM_MISMATCH:rrn" not in ex.warnings
+
+
+def test_one_low_confidence_digit_lowers_rrn_confidence():
+    rrn = _valid_rrn("800101", "2", "34567")
+    digits = rrn.replace("-", "")
+    w = (772 - 145) / 14
+    chars = [(c, 145 + i * w, 145 + (i + 1) * w) for i, c in enumerate(rrn)]
+    ocr = line(rrn, 145, 385, 772, 460, 0.97, chars=chars)
+    # 두 번째 숫자만 애매함
+    ocr = ocr.__class__(ocr.text, ocr.score, ocr.box, tuple(
+        c.__class__(c.text, 0.55 if i == 1 else c.score, c.box) for i, c in enumerate(ocr.chars)))
+    lines = [ocr if "-" in l.text else l for l in SPECIMEN]
+    ex = run(lines, lambda q: ("홍길동", 0.95))
+    assert ex.fields["rrn"].value.replace("-", "") == digits
+    assert ex.fields["rrn"].confidence == 0.55
+    assert decide(ex, RESIDENT_SPEC, Thresholds())[0] == Status.FAIL  # 핵심 필드 미채택
+
+
+def test_checksum_verified_rrn_accepted_at_lower_confidence():
+    rrn = _valid_rrn("800101", "2", "34567")
+    lines = [line(rrn, 145, 385, 772, 460, 0.70) if "-" in l.text else l for l in SPECIMEN]
+    ex = run(lines, lambda q: ("홍길동", 0.95))
+    assert ex.fields["rrn"].verified
+    assert decide(ex, RESIDENT_SPEC, Thresholds())[0] == Status.OK
+
+
+def test_checksum_mismatch_needs_normal_threshold():
+    lines = [line("800101-2345678", 145, 385, 772, 460, 0.70) if "-" in l.text else l for l in SPECIMEN]
+    ex = run(lines, lambda q: ("홍길동", 0.95))
+    assert not ex.fields["rrn"].verified
+    assert decide(ex, RESIDENT_SPEC, Thresholds())[0] == Status.FAIL

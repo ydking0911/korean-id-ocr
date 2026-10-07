@@ -34,7 +34,8 @@ def main(argv: list[str] | None = None) -> int:
     data = args.image.read_bytes()
     started = time.perf_counter()
     try:
-        prepared = prepare(data, max_side_len=settings.max_side_len, max_pixels=settings.max_image_pixels)
+        prepared = prepare(data, max_side_len=settings.max_side_len, max_pixels=settings.max_image_pixels,
+                           min_side_len=settings.min_side_len)
     except ImageDecodeError:
         print("IMAGE_DECODE_ERROR", file=sys.stderr)
         return 2
@@ -42,8 +43,10 @@ def main(argv: list[str] | None = None) -> int:
         lines = engine.run(prepared.bgr, scale=prepared.scale)
         out = {"lines": [{"text": l.text, "score": l.score, "box": l.box} for l in lines]}
     else:
-        th = Thresholds(settings.threshold_numeric, settings.threshold_text, settings.threshold_address)
-        out = analyze(prepared, engine, th, mask_rrn=settings.rrn_output == "masked").to_dict()
+        th = Thresholds(settings.threshold_numeric, settings.threshold_text, settings.threshold_address, settings.threshold_verified)
+        out = analyze(prepared, engine, th, mask_rrn=settings.rrn_output == "masked",
+                      strict_checksum=settings.rrn_checksum == "strict",
+                      document_checks=settings.document_checks).to_dict()
     out["elapsed_ms"] = round((time.perf_counter() - started) * 1000)
 
     print(json.dumps(out, ensure_ascii=False, indent=2))

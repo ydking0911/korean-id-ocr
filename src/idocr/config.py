@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     rec_model: str = "korean_PP-OCRv5_rec_mobile.onnx"
     rec_keys: str = "ppocrv5_korean_dict.txt"
     cls_model: str = "ch_ppocr_mobile_v2.0_cls_mobile.onnx"
-    use_cls: bool = True
+    face_model: str = "face_detection_yunet_2023mar.onnx"
+    # 줄 단위 방향 분류(0°/180°). 짧은 줄(이름 등)을 뒤집힌 것으로 오판해 기본으로 끈다.
+    # 뒤집힌 사진은 파이프라인의 180° 재시도 패스가 처리한다 (docs/09-roadmap.md 4단계 기록)
+    use_cls: bool = False
 
     # 동시성: ocr_workers × ort_intra_threads ≤ 코어 수 권장
     ocr_workers: int = 2
@@ -28,6 +31,8 @@ class Settings(BaseSettings):
     max_image_bytes: int = 10 * 1024 * 1024
     max_image_pixels: int = 40_000_000
     max_side_len: int = 2000
+    # 긴 변이 이보다 작으면 확대 (작은 사진의 인식률 개선)
+    min_side_len: int = 1000
 
     # /v1/ocr/raw는 원문(주민번호 전체 포함)을 돌려주므로 운영에서는 끈다
     enable_raw_endpoint: bool = False
@@ -37,11 +42,19 @@ class Settings(BaseSettings):
 
     # 주민번호 출력: full(개발 기본) | masked("900101-1******")
     rrn_output: Literal["full", "masked"] = "full"
+    # 주민번호 검증번호 불일치: warn = 경고만, strict = 주민번호 미채택(→ FAIL). 2020.10 이후 부여 번호는 검증번호가 없다
+    rrn_checksum: Literal["warn", "strict"] = "warn"
+    # 위조 의심 신호(document_checks): 얼굴·카드 비율·바탕 색감. 판정에는 영향 없음 (docs/12)
+    document_checks: bool = True
 
     # 필드 채택 신뢰도 임계값 (docs/05-output-schema.md 6절). 평가 하네스로 재조정 예정
     threshold_numeric: float = 0.90
     threshold_text: float = 0.85
     threshold_address: float = 0.80
+    threshold_verified: float = 0.60  # 검증번호가 맞는 주민번호
+
+    # 주소 교정용 추가 사전 (도로명·건물명, 공백·줄바꿈 구분 단어 목록). 없으면 행정구역 사전만 사용
+    address_lexicon: str | None = None
 
     log_level: str = "INFO"
 
