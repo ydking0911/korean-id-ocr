@@ -93,7 +93,7 @@ def test_original_pass_low_address_gives_partial():
     v = values(ex)
     assert v["aptitude_period"] == {"start": "2024-01-01", "end": "2024-12-31", "kind": "APTITUDE"}
     assert v["issue_date"] == "2014-11-21" and v["issuer"] == "서울지방경찰청장"
-    assert v["serial_code"] == "NV676V"  # 'SAA' 노이즈는 숫자가 없어 제외
+    assert v["serial_code"] == "NV676V"  # 'SAA' 노이즈는 6자리가 아니라 제외
     assert ex.fields["address"].confidence == 0.66
     assert decide(ex, LICENSE_SPEC, Thresholds()) == (Status.PARTIAL, None)
 
@@ -160,7 +160,8 @@ def test_find_license_types(raw, expected):
     assert T.find_license_types(raw) == expected
 
 
-@pytest.mark.parametrize("raw,code", [("NV676V", "NV676V"), ("nv676v", "NV676V"), ("SAA", None), ("123456", None)])
+@pytest.mark.parametrize("raw,code", [("NV676V", "NV676V"), ("NV676 V", "NV676V"), ("ABCDEF", "ABCDEF"),
+                                      ("123456", "123456"), ("oioisu", None), ("SAA", None), ("ABCDEFG", None)])
 def test_find_serial_code(raw, code):
     assert T.find_serial_code(raw) == code
 
@@ -236,3 +237,22 @@ def test_masked_license_number_and_new_police_name():
 
 def test_no_condition_label_gives_null():
     assert run(LICENSE_CONTRAST).fields["conditions"] is None
+
+
+def test_serial_code_lookalikes_give_warning_and_alternatives():
+    lines = [line("H0KMIA", 1316, 730, 1480, 774, 0.99) if l.text == "NV676V" else l for l in LICENSE_CONTRAST]
+    ex = run(lines)
+    assert ex.fields["serial_code"].value == "H0KMIA"  # 읽은 그대로 (O·I도 실제로 쓰인다)
+    assert "LOOKALIKE:serial_code" in ex.warnings
+    alts = ex.derived["serial_code_alternatives"]
+    assert sorted(alts) == sorted(["HOKMIA", "HQKMIA", "H0KM1A", "HOKM1A", "HQKM1A"])
+
+
+def test_serial_code_noise_below_issue_date_ignored():
+    lines = [l for l in LICENSE_CONTRAST if l.text != "NV676V"] + [line("OIOLSU", 1316, 930, 1480, 974, 0.6)]
+    assert run(lines).fields["serial_code"] is None
+
+
+def test_serial_alternatives_capped():
+    assert T.serial_alternatives("000000") == []  # 3^6 후보는 너무 많음
+    assert T.serial_alternatives("NV676V") == []

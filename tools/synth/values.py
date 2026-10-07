@@ -53,7 +53,7 @@ GYEONGGI_NORTH = {"고양시", "의정부시", "가평군"}
 
 LICENSE_TYPES = [("1종보통", 45), ("2종보통", 35), ("1종대형", 8), ("2종원동기", 5), ("2종소형", 4),
                  ("1종특수(대형견인)", 1), ("1종특수(구난)", 1), ("1종소형", 1)]
-SERIAL_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789"
+SERIAL_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"  # 실물 코드에 O·I도 쓰인다 (사용자 확인)
 
 
 @dataclass
@@ -145,10 +145,6 @@ def driver_license(rng: random.Random, today: date) -> dict:
     apt_year = issue.year + rng.choice([7, 9, 10])
     start, end = date(apt_year, 1, 1), date(apt_year, 12, 31)
     serial = "".join(rng.choice(SERIAL_CHARS) for _ in range(6))
-    if not any(c.isdigit() for c in serial):
-        serial = serial[:5] + str(rng.randint(0, 9))
-    if not any(c.isalpha() for c in serial):
-        serial = rng.choice("ABCDEFGHJK") + serial[1:]
     return {
         "document_type": "DRIVER_LICENSE",
         "person": p,

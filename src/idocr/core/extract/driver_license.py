@@ -63,7 +63,7 @@ def extract(lines: list[Line], title: Line | None, recognize: Recognizer | None 
             issuer.valid = issuer.value in T.POLICE_ISSUERS
         fields["issuer"] = issuer
 
-    _find_serial_code(lines, rrn_line, fields)
+    _find_serial_code(lines, rrn_line, date_line, fields, warnings, derived)
     _find_conditions(lines, rrn_line, fields)
     return Extraction(DocumentType.DRIVER_LICENSE, fields, warnings, derived)
 
@@ -165,10 +165,17 @@ def _find_conditions(lines, rrn_line, fields):
             return
 
 
-def _find_serial_code(lines, rrn_line, fields):
-    # 오른쪽 작은 사진 아래. 본문 열보다 오른쪽에 있는 것을 우선
-    cands = [(l, c) for l in lines if l.is_below(rrn_line) for c in [T.find_serial_code(l.text)] if c]
+def _find_serial_code(lines, rrn_line, date_line, fields, warnings, derived):
+    # 오른쪽 작은 사진 아래, 본문 열보다 오른쪽, 발급일 줄보다 위 (아래쪽 직인 노이즈 배제)
+    cands = [(l, c) for l in lines
+             if l.is_below(rrn_line) and (l.x0 + l.x1) / 2 > rrn_line.x1 and (date_line is None or l.is_above(date_line))
+             for c in [T.find_serial_code(l.text)] if c]
     if not cands:
         return
     line, code = max(cands, key=lambda c: c[0].x0)
     fields["serial_code"] = FieldValue(code, line.score, [line.box], True)
+    if T.has_lookalike(code):
+        warnings.append("LOOKALIKE:serial_code")
+        alts = T.serial_alternatives(code)
+        if alts:
+            derived["serial_code_alternatives"] = alts

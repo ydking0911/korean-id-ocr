@@ -324,13 +324,37 @@ def license_type_is_valid(kind: str) -> bool:
 
 _SERIAL = re.compile(r"[A-Z0-9]{6}")
 
+# 경찰청 진위조회 안내에도 혼동 주의로 나오는 글자들. 실물 코드에 O·I도 쓰이므로 한쪽으로 바꾸지 않는다
+LOOKALIKES = ({"O", "0", "Q"}, {"I", "1"})
+_MAX_ALTERNATIVES = 16
+
 
 def find_serial_code(text: str) -> str | None:
-    """보안코드(암호일련번호): 영대문자·숫자 6자리, 문자와 숫자가 섞여 있음."""
-    s = re.sub(r"\s", "", text).upper()
-    if _SERIAL.fullmatch(s) and any(c.isdigit() for c in s) and any(c.isalpha() for c in s):
-        return s
-    return None
+    """보안코드(암호일련번호): 영대문자·숫자 6자리. 숫자가 없는 코드도 있다(무작위 6자리의 약 14%).
+    소문자가 섞이면 직인 노이즈('oioisu')로 보고 버린다."""
+    s = re.sub(r"\s", "", text)
+    return s if _SERIAL.fullmatch(s) else None
+
+
+def serial_alternatives(code: str) -> list[str]:
+    """비슷한 글자를 바꿔 만든 다른 후보 (원래 값 제외). 너무 많으면(>16) 빈 목록."""
+    options = []
+    for c in code:
+        group = next((g for g in LOOKALIKES if c in g), None)
+        options.append(sorted(group) if group else [c])
+    total = 1
+    for o in options:
+        total *= len(o)
+    if total - 1 > _MAX_ALTERNATIVES:
+        return []
+    out = [""]
+    for o in options:
+        out = [p + c for p in out for c in o]
+    return [a for a in out if a != code]
+
+
+def has_lookalike(code: str) -> bool:
+    return any(c in g for c in code for g in LOOKALIKES)
 
 
 def aptitude_kind(text: str) -> str | None:
