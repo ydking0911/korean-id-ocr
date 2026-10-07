@@ -11,3 +11,4 @@ CPU 기반 신분증(주민등록증/운전면허증) OCR worker → 구조화 J
 7. [07-reference-ocr-ai-module.md](07-reference-ocr-ai-module.md) — 참고 레포(ocr-ai-module) 분석
 8. [08-reference-id-ocr-project.md](08-reference-id-ocr-project.md) — 참고 레포(ID-OCR-PROJECT, YOLOv5+EasyOCR) 분석
 9. [09-roadmap.md](09-roadmap.md) — **로드맵 및 진행 현황**
+10. [10-synthetic-data.md](10-synthetic-data.md) — 합성 신분증 데이터 계획 (케이뱅크 블로그 참고)
