@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.verify_only and (args.force or not path.exists()):
             print(f"[download] {key} <- {entry['path']}")
             try:
-                download(base_url + entry["path"], path)
+                download(entry.get("url") or base_url + entry["path"], path)
             except OSError as e:
                 print(f"[error] {key}: 다운로드 실패 ({type(e).__name__}: {e})", file=sys.stderr)
                 failed = True

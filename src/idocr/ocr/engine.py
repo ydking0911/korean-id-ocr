@@ -15,6 +15,7 @@ import numpy as np
 from rapidocr import LangRec, ModelType, OCRVersion, RapidOCR
 
 from idocr.config import Settings
+from idocr.ocr.face import FaceDetector
 
 
 class ModelFilesMissing(Exception):
@@ -65,6 +66,8 @@ def required_files(settings: Settings) -> dict[str, Path]:
         "rec": settings.model_path(settings.rec_model),
         "cls": settings.model_path(settings.cls_model),
     }
+    if settings.document_checks:
+        files["face"] = settings.model_path(settings.face_model)
     keys = settings.model_path(settings.rec_keys)
     if keys.exists():
         files["rec_keys"] = keys
@@ -106,6 +109,7 @@ class OcrEngine:
             raise ModelFilesMissing(", ".join(missing))
         self._ocr = RapidOCR(params=build_params(settings))
         self._use_cls = settings.use_cls
+        self.faces = FaceDetector(files["face"]) if "face" in files else None
         if settings.require_hangul and not self.has_hangul():
             raise ModelCharsetError("recognition model charset has no Hangul")
 

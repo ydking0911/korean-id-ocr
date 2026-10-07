@@ -56,6 +56,7 @@ class IdDocumentResult:
     warnings: list[str]
     fail_reason: FailReason | None
     preprocess: dict[str, Any]
+    document_checks: dict[str, Any] | None = None  # 위조 의심 신호 (판정과 무관한 참고값)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -68,4 +69,5 @@ class IdDocumentResult:
             "warnings": self.warnings,
             "fail_reason": self.fail_reason.value if self.fail_reason else None,
             "preprocess": self.preprocess,
+            "document_checks": self.document_checks,
         }

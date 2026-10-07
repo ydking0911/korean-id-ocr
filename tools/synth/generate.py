@@ -15,6 +15,7 @@ from datetime import date
 from pathlib import Path
 
 from tools.synth import values
+from tools.synth.fakes import FakeTemplates
 from tools.synth.augment import CONDITIONS, STRESS_CONDITIONS, apply, to_jpeg
 from tools.synth.render import Fonts, Templates, render
 
@@ -32,6 +33,9 @@ def main(argv=None) -> int:
                     choices=list(CONDITIONS + STRESS_CONDITIONS))
     ap.add_argument("--docs", nargs="*", default=list(GENERATORS))
     ap.add_argument("--mask-ratio", type=float, default=0.1, help="주민번호 뒷자리를 가린 카드 비율")
+    ap.add_argument("--fake", choices=["paper", "paper_photo", "sheet"], default=None,
+                    help="위조 의심 신호 평가용 가짜 (tools/synth/fakes.py)")
+    ap.add_argument("--grayscale", action="store_true", help="흑백 복사본처럼 회색조로")
     ap.add_argument("--today", type=date.fromisoformat, default=date(2026, 10, 7))
     args = ap.parse_args(argv)
 
@@ -44,11 +48,15 @@ def main(argv=None) -> int:
             for n in range(args.per_condition):
                 rng = random.Random(f"{args.seed}:{cond}:{doc}:{n}")
                 card = GENERATORS[doc](rng, args.today)
-                img, gt = render(card, rng, fonts, templates, mask_rrn=rng.random() < args.mask_ratio)
+                tpl = FakeTemplates(args.fake, rng, templates, fonts) if args.fake else templates
+                img, gt = render(card, rng, fonts, tpl, mask_rrn=rng.random() < args.mask_ratio)
+                if args.grayscale:
+                    img = img.convert("L").convert("RGB")
                 img, quality = apply(img, cond, rng)
                 stem = f"{doc}_{n:04d}"
                 (args.out / cond / f"{stem}.jpg").write_bytes(to_jpeg(img, quality))
-                gt.update({"condition": cond, "seed": args.seed})
+                gt.update({"condition": cond, "seed": args.seed,
+                           "fake": args.fake or ("grayscale" if args.grayscale else None)})
                 (args.out / cond / f"{stem}.gt.json").write_text(json.dumps(gt, ensure_ascii=False, indent=1),
                                                                  encoding="utf-8")
                 index.append({"image": f"{cond}/{stem}.jpg", "gt": f"{cond}/{stem}.gt.json",

@@ -45,7 +45,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         th = Thresholds(settings.threshold_numeric, settings.threshold_text, settings.threshold_address, settings.threshold_verified)
         out = analyze(prepared, engine, th, mask_rrn=settings.rrn_output == "masked",
-                      strict_checksum=settings.rrn_checksum == "strict").to_dict()
+                      strict_checksum=settings.rrn_checksum == "strict",
+                      document_checks=settings.document_checks).to_dict()
     out["elapsed_ms"] = round((time.perf_counter() - started) * 1000)
 
     print(json.dumps(out, ensure_ascii=False, indent=2))

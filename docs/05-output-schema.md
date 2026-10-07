@@ -23,6 +23,7 @@
   "warnings": ["MASKED:rrn"],             // 정보성 메모 (아래 표). 이미지 품질 경고는 없음
   "fail_reason": null,                    // FAIL일 때: 6절 표
   "preprocess": { "exif_rotated": false, "scale": 1.0, "rotation": 90, "contrast_enhanced": false, "passes": 2 },
+  "document_checks": { "suspicious": false, "reasons": [], "inconclusive": [], "face": {…}, "card_aspect": {…}, "background": {…} },
   "model": { "det": "ppocrv5-det-server@sha256:abcd…", "rec": "ppocrv5-korean@…", "schema": "1.0" },
   "elapsed_ms": 412
 }
@@ -116,6 +117,10 @@ OCR로 읽은 값이 아니라 계산한 값. 클라이언트가 쓰기 편하�
 | `LOOKALIKE:serial_code` | 보안코드에 혼동 글자(O·0·Q, I·1)가 있음. 실물에 O·I도 쓰여 한쪽으로 바꾸지 않고, 다른 후보를 `derived.serial_code_alternatives`로 준다 |
 
 **주민번호 신뢰도**는 줄 평균이 아니라 주민번호 13자리 중 **가장 낮은 글자 신뢰도**다 (숫자 하나만 애매한 경우를 놓치지 않기 위해).
+
+## 5.6 위조 의심 신호 (`document_checks`)
+
+판정과 무관한 참고값. 형식·신호·평가는 [12 문서](12-authenticity.md). 문서 미인식이면 `null`.
 
 ## 6. status 판정 규칙 (✅ 결정, 2단계 구현)
 

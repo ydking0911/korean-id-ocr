@@ -105,7 +105,8 @@ def run(items: list[dict], settings: Settings) -> list[dict]:
                                min_side_len=settings.min_side_len)
             with pool.acquire() as engine:
                 result = analyze(prepared, engine, th,
-                                 strict_checksum=settings.rrn_checksum == "strict").to_dict()
+                                 strict_checksum=settings.rrn_checksum == "strict",
+                                 document_checks=settings.document_checks).to_dict()
         except ImageDecodeError:
             result = {"status": "FAIL", "fail_reason": "IMAGE_DECODE_ERROR", "fields": {}, "field_meta": {}}
         ms = (time.perf_counter() - started) * 1000

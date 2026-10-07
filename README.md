@@ -19,6 +19,7 @@
 - **CPU 전용** — RapidOCR + PaddleOCR PP-OCRv5 한국어 ONNX 모델. PyTorch·Paddle·GPU 없이 동작
 - **구조화 JSON** — 필드마다 값·신뢰도·위치(bbox)·검증 결과, 문서 단위 `OK` / `PARTIAL` / `FAIL` 판정
 - **촬영 조건에 강함** — 대비 보정과 90°·270°·180° 회전 재시도, 기울어진 사진·쪼개진 줄·직인에 가린 글자 보정
+- **위조 의심 신호** — 사진 영역 얼굴·카드 비율·바탕 색감으로 종이에 쓴 글씨·흑백 복사본을 표시 (판정 아닌 참고값, [문서](docs/12-authenticity.md))
 - **개인정보 우선** — 이미지는 메모리에서만 처리, 로그 숫자 마스킹, read-only 컨테이너
 - **재현 가능한 모델** — 매니페스트 + SHA256 검증, 빌드 시 이미지에 포함 (런타임 다운로드 없음)
 
@@ -139,6 +140,7 @@ curl --data-binary @id.jpg -H "Content-Type: image/jpeg" http://127.0.0.1:8000/v
 | `IDOCR_MAX_IMAGE_PIXELS` | `40000000` | 디코딩 픽셀 수 상한 |
 | `IDOCR_MAX_SIDE_LEN` | `2000` | 긴 변이 이보다 크면 축소 |
 | `IDOCR_RRN_CHECKSUM` | `warn` | 주민번호 검증번호 불일치 처리. `warn` = 경고만, `strict` = 주민번호 미채택(FAIL). 2020.10 이후 부여·변경 번호는 검증번호가 없다 |
+| `IDOCR_DOCUMENT_CHECKS` | `true` | 위조 의심 신호(`document_checks`) 계산. 끄면 얼굴 모델도 불필요 |
 | `IDOCR_MIN_SIDE_LEN` | `1000` | 긴 변이 이보다 작으면 확대 (작은 사진의 오인식 감소, `0`이면 끔) |
 | `IDOCR_QUEUE_LIMIT` | `16` | 동시 대기 요청 상한 (초과 시 503) |
 | `IDOCR_REQUEST_TIMEOUT_S` | `30` | 요청 처리 시간 상한 (초과 시 504) |
@@ -236,4 +238,5 @@ python -m tools.evaluate --data samples/synthetic   # → samples/eval/latest/re
 
 - [RapidOCR](https://github.com/RapidAI/RapidOCR) · [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) (PP-OCRv5 모델, Apache-2.0)
 - [admdongkor](https://github.com/vuski/admdongkor) — 행정구역 이름 사전 (CC BY 4.0, `src/idocr/data/admin_names.json`)
+- [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) — 위조 의심 신호용 얼굴 검출 (MIT)
 - [ONNX Runtime](https://onnxruntime.ai/) · [FastAPI](https://fastapi.tiangolo.com/) · [OpenCV](https://opencv.org/) · [Pillow](https://python-pillow.org/)
