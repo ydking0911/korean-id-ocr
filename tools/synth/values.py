@@ -76,6 +76,14 @@ def _rand_date(rng: random.Random, start: date, end: date) -> date:
     return start + timedelta(days=rng.randint(0, max(0, (end - start).days)))
 
 
+def _rrn_back(birth: date, gender_digit: str, rng: random.Random) -> str:
+    """뒷자리 2~7번째. 실물처럼 마지막 자리는 검증번호 (2020.10 이전 부여 번호 규칙)."""
+    body = f"{rng.randint(0, 99999):05d}"
+    d = [int(c) for c in f"{birth:%y%m%d}{gender_digit}{body}"]
+    check = (11 - sum(w * x for w, x in zip((2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5), d)) % 11) % 10
+    return body + str(check)
+
+
 def person(rng: random.Random, today: date, foreign_ratio: float = 0.0) -> Person:
     sur, sur_hanja, _ = rng.choices(SURNAMES, weights=[w for *_, w in SURNAMES])[0]
     n_given = rng.choices([1, 2, 3], weights=[8, 90, 2])[0]
@@ -100,7 +108,7 @@ def person(rng: random.Random, today: date, foreign_ratio: float = 0.0) -> Perso
         name_hanja=sur_hanja + "".join(HANJA[i] for i in idx),
         birth=birth,
         gender_digit=digit,
-        rrn_back=f"{rng.randint(0, 999999):06d}",
+        rrn_back=_rrn_back(birth, digit, rng),
         sido=sido,
         sigungu=sigungu,
         address_parts=parts,

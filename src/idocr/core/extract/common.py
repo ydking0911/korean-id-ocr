@@ -25,8 +25,25 @@ def find_rrn(lines: list[Line], warnings: list[str], today: date) -> tuple[Line 
         warnings.append("AMBIGUOUS:rrn")
     if rrn.masked:
         warnings.append("MASKED:rrn")
+    checksum = T.rrn_checksum_ok(rrn)
+    if checksum is False:
+        warnings.append("CHECKSUM_MISMATCH:rrn")
     valid = T.rrn_is_valid(rrn, today) and len(distinct) == 1
-    return line, rrn, FieldValue(rrn.formatted(), line.score, [line.box], valid)
+    return line, rrn, FieldValue(rrn.formatted(), _rrn_confidence(line, rrn), [line.box], valid,
+                                 verified=bool(checksum))
+
+
+def _rrn_confidence(line: Line, rrn: T.Rrn) -> float:
+    """줄 평균이 아니라 주민번호 숫자 중 가장 낮은 글자 신뢰도. 숫자 하나만 애매한 경우를 놓치지 않는다.
+    글자 박스를 못 맞추면 줄 신뢰도."""
+    digits = rrn.front + rrn.gender_digit + (rrn.back_rest or "")
+    chars = [c for c in line.chars if T.numeric_view(c.text).strip().isdigit()]
+    seq = "".join(T.numeric_view(c.text).strip() for c in chars)
+    i = seq.find(digits)
+    if i < 0 or len(seq) != len(chars):
+        return line.score
+    # 숫자 글자만 본다: 가림 문자('******')는 신뢰도가 낮아도 판정과 무관
+    return min(c.score for c in chars[i:i + len(digits)])
 
 
 def read_name(line: Line, recognize: Recognizer | None) -> tuple[FieldValue | None, FieldValue | None]:

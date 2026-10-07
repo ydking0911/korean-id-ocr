@@ -94,7 +94,7 @@ def load_items(data: Path | None, specimen: bool) -> list[dict]:
 
 def run(items: list[dict], settings: Settings) -> list[dict]:
     pool = EnginePool.create(settings)
-    th = Thresholds(settings.threshold_numeric, settings.threshold_text, settings.threshold_address)
+    th = Thresholds(settings.threshold_numeric, settings.threshold_text, settings.threshold_address, settings.threshold_verified)
 
     def one(item):
         gt = json.loads(Path(item["gt"]).read_text(encoding="utf-8"))
@@ -104,7 +104,8 @@ def run(items: list[dict], settings: Settings) -> list[dict]:
             prepared = prepare(data, max_side_len=settings.max_side_len, max_pixels=settings.max_image_pixels,
                                min_side_len=settings.min_side_len)
             with pool.acquire() as engine:
-                result = analyze(prepared, engine, th).to_dict()
+                result = analyze(prepared, engine, th,
+                                 strict_checksum=settings.rrn_checksum == "strict").to_dict()
         except ImageDecodeError:
             result = {"status": "FAIL", "fail_reason": "IMAGE_DECODE_ERROR", "fields": {}, "field_meta": {}}
         ms = (time.perf_counter() - started) * 1000
@@ -116,6 +117,7 @@ def run(items: list[dict], settings: Settings) -> list[dict]:
             "status": result["status"],
             "fail_reason": result.get("fail_reason"),
             "passes": (result.get("preprocess") or {}).get("passes"),
+            "warnings": result.get("warnings") or [],
             "elapsed_ms": round(ms),
             "fields": score(result, gt) if result.get("document_type") == gt["document_type"] else {},
             "core": list(SPECS[DocumentType(gt["document_type"])].core),
@@ -186,8 +188,32 @@ def summarize(rows: list[dict], th: Thresholds) -> str:
                            f"{'채택' if f['accepted'] else '미채택'})")
         out += ["", "</details>", ""]
 
+    out += rrn_safety(rows)
     out += calibration(rows)
     return "\n".join(out)
+
+
+def rrn_safety(rows: list[dict]) -> list[str]:
+    """성인 판단에 쓰는 주민번호만 따로: 틀린 값이 채택됐는지, 검증번호가 오답을 잡았는지."""
+    out = ["## 주민번호 안전성", "",
+           "| 문서 | 장수 | 검출 | 정답 | **오채택** | 오답 중 검증번호 경고 | 정답인데 검증번호 경고 |",
+           "|---|---|---|---|---|---|---|"]
+    for doc in sorted({r["document_type"] for r in rows}):
+        fs = [(r["fields"]["rrn"], "CHECKSUM_MISMATCH:rrn" in r.get("warnings", []))
+              for r in rows if r["document_type"] == doc and r["fields"]]
+        n = sum(r["document_type"] == doc for r in rows)
+        wrong = [(f, w) for f, w in fs if f["found"] and not f["correct"]]
+        out.append(f"| {doc} | {n} | {pct(sum(f['found'] for f, _ in fs), n)} | "
+                   f"{pct(sum(f['correct'] for f, _ in fs), n)} | {sum(f['accepted'] for f, _ in wrong)} | "
+                   f"{sum(w for _, w in wrong)}/{len(wrong)} | {sum(w for f, w in fs if f['correct'])} |")
+    bad = [r for r in rows if r["fields"] and r["fields"]["rrn"]["found"] and not r["fields"]["rrn"]["correct"]]
+    if bad:
+        out += ["", "<details><summary>주민번호 오답</summary>", ""]
+        out += [f"- {r['condition']}: 예측 `{r['fields']['rrn']['pred']}` / 정답 `{r['fields']['rrn']['gt']}` "
+                f"(conf {r['fields']['rrn']['confidence']}, {'채택' if r['fields']['rrn']['accepted'] else '미채택'}, "
+                f"검증번호 {'불일치' if 'CHECKSUM_MISMATCH:rrn' in r['warnings'] else '일치/없음'})" for r in bad]
+        out += ["", "</details>"]
+    return out + [""]
 
 
 def calibration(rows: list[dict]) -> list[str]:
@@ -235,7 +261,7 @@ def main(argv=None) -> int:
         raise SystemExit("평가할 이미지가 없음 (tools.synth.generate 먼저 실행)")
     started = time.perf_counter()
     rows = run(items, settings)
-    th = Thresholds(settings.threshold_numeric, settings.threshold_text, settings.threshold_address)
+    th = Thresholds(settings.threshold_numeric, settings.threshold_text, settings.threshold_address, settings.threshold_verified)
     report = summarize(rows, th)
 
     args.out.mkdir(parents=True, exist_ok=True)

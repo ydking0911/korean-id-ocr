@@ -89,6 +89,19 @@ def find_rrns(text: str) -> list[Rrn]:
     return [r for _, r in sorted(found, key=lambda x: x[0])]
 
 
+_RRN_WEIGHTS = (2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5)
+
+
+def rrn_checksum_ok(rrn: Rrn) -> bool | None:
+    """마지막 자리 검증번호. 2020년 10월 이전 부여 번호에만 있다 (이후 부여·변경 번호는 임의 숫자).
+    앞 12자리 중 한 자리를 잘못 읽으면 약 98%가 불일치로 드러난다. 가려져 있으면 None."""
+    if rrn.back_rest is None:
+        return None
+    d = [int(c) for c in rrn.front + rrn.gender_digit + rrn.back_rest]
+    check = (11 - sum(w * x for w, x in zip(_RRN_WEIGHTS, d)) % 11) % 10
+    return check == d[12]
+
+
 def rrn_is_valid(rrn: Rrn, today: date | None = None) -> bool:
     today = today or date.today()
     if rrn.gender_digit in "90":  # 1800년대 출생: 사실상 OCR 오류

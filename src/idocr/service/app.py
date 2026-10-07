@@ -204,9 +204,10 @@ def _raw_job(rt: _Runtime, data: bytes):
 def _id_job(rt: _Runtime, data: bytes):
     prepared = _prepare(rt, data)
     s = rt.settings
-    thresholds = judge.Thresholds(s.threshold_numeric, s.threshold_text, s.threshold_address)
+    thresholds = judge.Thresholds(s.threshold_numeric, s.threshold_text, s.threshold_address, s.threshold_verified)
     with rt.pool.acquire() as engine:
-        return analyze(prepared, engine, thresholds, mask_rrn=s.rrn_output == "masked")
+        return analyze(prepared, engine, thresholds, mask_rrn=s.rrn_output == "masked",
+                       strict_checksum=s.rrn_checksum == "strict")
 
 
 def _error(request: Request, status: int, code: str) -> JSONResponse:

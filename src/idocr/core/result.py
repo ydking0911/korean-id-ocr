@@ -35,6 +35,7 @@ class FieldValue:
     confidence: float
     boxes: list[Quad] = field(default_factory=list)
     valid: bool = True
+    verified: bool = False  # 값 자체의 검증 장치로 확인됨 (주민번호 검증번호 일치) → 낮은 임계값 적용
 
 
 @dataclass

@@ -62,8 +62,8 @@ class _Attempt:
 
 
 def analyze(prepared: PreparedImage, engine, thresholds: judge.Thresholds,
-            mask_rrn: bool = False, today: date | None = None) -> IdDocumentResult:
-    first = best = _run_pass(prepared.bgr, ORIGINAL, engine, today)
+            mask_rrn: bool = False, today: date | None = None, strict_checksum: bool = False) -> IdDocumentResult:
+    first = best = _run_pass(prepared.bgr, ORIGINAL, engine, today, strict_checksum)
     passes_run = 1
     for p in _retry_order(first):
         if best.extraction is not None:
@@ -72,7 +72,7 @@ def analyze(prepared: PreparedImage, engine, thresholds: judge.Thresholds,
         elif best.doc_type != DocumentType.UNKNOWN:
             break  # 문서 종류는 알아냈지만 추출기가 없음 → 재시도해도 결과가 같다
         passes_run += 1
-        attempt = _run_pass(prepared.bgr, p, engine, today)
+        attempt = _run_pass(prepared.bgr, p, engine, today, strict_checksum)
         if _rank(attempt, thresholds) > _rank(best, thresholds):
             best = attempt
 
@@ -103,7 +103,7 @@ def _rank(a: _Attempt, th: judge.Thresholds) -> tuple:
     return base + (a.doc_type != DocumentType.UNKNOWN,)
 
 
-def _run_pass(bgr: np.ndarray, p: Pass, engine, today) -> _Attempt:
+def _run_pass(bgr: np.ndarray, p: Pass, engine, today, strict_checksum: bool = False) -> _Attempt:
     img = enhance_contrast(bgr) if p.contrast else bgr
     img, inverse = rotate(img, p.rotation)
     lines = to_lines(engine.run(img))
@@ -115,6 +115,8 @@ def _run_pass(bgr: np.ndarray, p: Pass, engine, today) -> _Attempt:
 
     extractor = EXTRACTORS.get(doc_type)
     extraction = extractor(lines, title, recognize, today) if extractor else None
+    if strict_checksum and extraction and "CHECKSUM_MISMATCH:rrn" in extraction.warnings:
+        extraction.fields["rrn"].valid = False  # 재시도 패스에서 검증번호가 맞는 결과를 찾게 된다
     title_low = title is not None and len(lines) >= 3 and title.cy > sorted(l.cy for l in lines)[len(lines) // 2]
     long_boxes = [l for l in lines if len(l.text) >= 3]
     vertical = bool(long_boxes) and sum(l.h > 1.5 * (l.x1 - l.x0) for l in long_boxes) > len(long_boxes) / 2

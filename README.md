@@ -138,6 +138,7 @@ curl --data-binary @id.jpg -H "Content-Type: image/jpeg" http://127.0.0.1:8000/v
 | `IDOCR_MAX_IMAGE_BYTES` | `10485760` | 요청 본문 상한 |
 | `IDOCR_MAX_IMAGE_PIXELS` | `40000000` | 디코딩 픽셀 수 상한 |
 | `IDOCR_MAX_SIDE_LEN` | `2000` | 긴 변이 이보다 크면 축소 |
+| `IDOCR_RRN_CHECKSUM` | `warn` | 주민번호 검증번호 불일치 처리. `warn` = 경고만, `strict` = 주민번호 미채택(FAIL). 2020.10 이후 부여·변경 번호는 검증번호가 없다 |
 | `IDOCR_MIN_SIDE_LEN` | `1000` | 긴 변이 이보다 작으면 확대 (작은 사진의 오인식 감소, `0`이면 끔) |
 | `IDOCR_QUEUE_LIMIT` | `16` | 동시 대기 요청 상한 (초과 시 503) |
 | `IDOCR_REQUEST_TIMEOUT_S` | `30` | 요청 처리 시간 상한 (초과 시 504) |

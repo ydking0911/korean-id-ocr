@@ -176,3 +176,18 @@ def test_tolerant_date_separators(raw, iso):
                                           ("1종보통 2보통", ["1종보통", "2종보통"])])
 def test_fuzzy_license_kinds(raw, expected):
     assert T.find_license_types(raw) == expected
+
+
+def test_rrn_checksum_detects_single_digit_misreads():
+    good = T.find_rrns("900101-1234568")[0]  # 9·0·0·1·0·1·1·2·3·4·5·6 → 검증번호 8
+    assert T.rrn_checksum_ok(good) is True
+    for i in range(6):  # 생년월일 한 자리 오인식
+        for v in "0123456789":
+            if v == good.front[i]:
+                continue
+            bad = T.Rrn(good.front[:i] + v + good.front[i + 1:], good.gender_digit, good.back_rest)
+            if T.rrn_checksum_ok(bad):
+                # 나머지 0과 10이 같은 검증번호가 되는 구조적 예외만 통과
+                d = [int(c) for c in bad.front + bad.gender_digit + bad.back_rest]
+                assert sum(w * x for w, x in zip((2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5), d)) % 11 in (0, 10)
+    assert T.rrn_checksum_ok(T.find_rrns("900101-1******")[0]) is None

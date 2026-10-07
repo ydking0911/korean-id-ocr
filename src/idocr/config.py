@@ -41,11 +41,14 @@ class Settings(BaseSettings):
 
     # 주민번호 출력: full(개발 기본) | masked("900101-1******")
     rrn_output: Literal["full", "masked"] = "full"
+    # 주민번호 검증번호 불일치: warn = 경고만, strict = 주민번호 미채택(→ FAIL). 2020.10 이후 부여 번호는 검증번호가 없다
+    rrn_checksum: Literal["warn", "strict"] = "warn"
 
     # 필드 채택 신뢰도 임계값 (docs/05-output-schema.md 6절). 평가 하네스로 재조정 예정
     threshold_numeric: float = 0.90
     threshold_text: float = 0.85
     threshold_address: float = 0.80
+    threshold_verified: float = 0.60  # 검증번호가 맞는 주민번호
 
     # 주소 교정용 추가 사전 (도로명·건물명, 공백·줄바꿈 구분 단어 목록). 없으면 행정구역 사전만 사용
     address_lexicon: str | None = None

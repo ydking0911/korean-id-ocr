@@ -8,6 +8,8 @@ import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 
 CONDITIONS = ("clean", "angle", "rotated", "bright", "dark", "blur", "jpeg", "glare", "background", "small")
+# 숫자 오인식을 일부러 유도하는 스트레스 조건 (기본 세트에는 넣지 않음, --conditions로 지정)
+STRESS_CONDITIONS = ("tiny", "heavyblur", "tinyjpeg")
 
 
 def _background(rng: random.Random, w: int, h: int) -> Image.Image:
@@ -86,6 +88,14 @@ def apply(card: Image.Image, condition: str, rng: random.Random) -> tuple[Image.
     elif condition == "small":
         w = rng.randint(480, 700)
         out = card.resize((w, round(card.height * w / card.width)), Image.LANCZOS)
+    elif condition == "tiny":  # 실물 저해상도 샘플(230px)과 비슷한 크기
+        w = rng.randint(260, 380)
+        out = card.resize((w, round(card.height * w / card.width)), Image.LANCZOS)
+    elif condition == "heavyblur":
+        out = card.filter(ImageFilter.GaussianBlur(rng.uniform(3.0, 4.5)))
+    elif condition == "tinyjpeg":
+        w = rng.randint(320, 450)
+        out, quality = card.resize((w, round(card.height * w / card.width)), Image.LANCZOS), rng.randint(15, 30)
     else:
         raise ValueError(condition)
     return out.convert("RGB"), quality

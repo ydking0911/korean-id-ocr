@@ -84,7 +84,7 @@ def test_contrast_pass_specimen():
     }
     assert ex.derived == {"birth_date": "1980-01-01", "sex": "F", "is_foreign_resident": False,
                           "license_region_name": "서울", "is_expired": True}
-    assert ex.warnings == ["REPAIRED:issuer"]
+    assert ex.warnings == ["CHECKSUM_MISMATCH:rrn", "REPAIRED:issuer"]  # 견본 번호는 가짜
     assert decide(ex, LICENSE_SPEC, Thresholds()) == (Status.OK, None)
 
 

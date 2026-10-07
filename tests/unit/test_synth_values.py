@@ -47,3 +47,13 @@ def test_same_seed_same_card():
     a = values.driver_license(random.Random("x"), TODAY)["fields"]
     b = values.driver_license(random.Random("x"), TODAY)["fields"]
     assert a == b
+
+
+def test_synthetic_rrn_has_valid_checksum():
+    import random
+    from datetime import date
+
+    from tools.synth.values import person
+    rng = random.Random(0)
+    for _ in range(200):
+        assert T.rrn_checksum_ok(T.find_rrns(person(rng, date(2026, 10, 7)).rrn)[0])

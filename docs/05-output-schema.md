@@ -88,6 +88,7 @@ OCR로 읽은 값이 아니라 계산한 값. 클라이언트가 쓰기 편하�
 | `sex` | 뒷자리 첫 숫자 홀/짝 | `"M"` / `"F"` |
 | `is_foreign_resident` | 뒷자리 첫 숫자 5~8 | `false` |
 | `license_region_name` | 면허번호 지역코드 | `"서울"` |
+| `serial_code_alternatives` | 보안코드 혼동 글자를 바꾼 다른 후보 (원래 값 제외, 16개 초과면 생략). 진위확인 조회 재시도용 | `["H0KM1A", …]` |
 | `is_expired` | `aptitude_period.end` < 오늘 (적성검사·갱신 기간 종료일 경과. `aptitude_period`가 valid일 때만) | `false` |
 
 성인 여부 판정은 **이 레포 범위 밖** (호출 측이 `birth_date`로 판단).
@@ -111,6 +112,10 @@ OCR로 읽은 값이 아니라 계산한 값. 클라이언트가 쓰기 편하�
 | `AMBIGUOUS:license_number` | 서로 다른 면허번호 후보가 둘 이상 → `license_number.valid=false` |
 | `MASKED:license_number` | 면허번호 일부가 가려져 있음 (`17-10-01XXXX-00`, 가린 자리는 `X`) |
 | `REPAIRED:address` | 주소의 시·도·시·군·구를 사전으로 교정함 (예: `대전광역세` → `대전광역시`) |
+| `CHECKSUM_MISMATCH:rrn` | 주민번호 마지막 자리(검증번호)가 계산값과 다름 → 숫자 오인식 가능성 높음. 2020.10 이후 부여·변경 번호는 검증번호가 없어 정상이어도 뜬다. `IDOCR_RRN_CHECKSUM=strict`이면 `rrn.valid=false` (→ FAIL) |
+| `LOOKALIKE:serial_code` | 보안코드에 혼동 글자(O·0·Q, I·1)가 있음. 실물에 O·I도 쓰여 한쪽으로 바꾸지 않고, 다른 후보를 `derived.serial_code_alternatives`로 준다 |
+
+**주민번호 신뢰도**는 줄 평균이 아니라 주민번호 13자리 중 **가장 낮은 글자 신뢰도**다 (숫자 하나만 애매한 경우를 놓치지 않기 위해).
 
 ## 6. status 판정 규칙 (✅ 결정, 2단계 구현)
 

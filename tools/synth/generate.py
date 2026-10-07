@@ -15,7 +15,7 @@ from datetime import date
 from pathlib import Path
 
 from tools.synth import values
-from tools.synth.augment import CONDITIONS, apply, to_jpeg
+from tools.synth.augment import CONDITIONS, STRESS_CONDITIONS, apply, to_jpeg
 from tools.synth.render import Fonts, Templates, render
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,7 +28,8 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, default=OUT_DIR)
     ap.add_argument("--per-condition", type=int, default=10, help="조건·문서마다 장수")
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("--conditions", nargs="*", default=list(CONDITIONS))
+    ap.add_argument("--conditions", nargs="*", default=list(CONDITIONS),
+                    choices=list(CONDITIONS + STRESS_CONDITIONS))
     ap.add_argument("--docs", nargs="*", default=list(GENERATORS))
     ap.add_argument("--mask-ratio", type=float, default=0.1, help="주민번호 뒷자리를 가린 카드 비율")
     ap.add_argument("--today", type=date.fromisoformat, default=date(2026, 10, 7))

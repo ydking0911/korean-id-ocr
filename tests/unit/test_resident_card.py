@@ -65,7 +65,7 @@ def test_specimen_with_name_recrop():
         "issuer": "서울특별시 금천구청장",
     }
     assert ex.derived == {"birth_date": "1980-01-01", "sex": "F", "is_foreign_resident": False}
-    assert ex.warnings == []
+    assert ex.warnings == ["CHECKSUM_MISMATCH:rrn"]  # 견본 번호는 가짜라 검증번호가 안 맞는다
     # 재인식 영역은 한글 3글자(155~405) 주변만, 한자 영역(~776)은 포함하지 않음
     (crop,) = calls
     assert crop[0][0] < 155 and 405 < crop[1][0] < 500
@@ -252,3 +252,47 @@ def test_ghost_birth_digits_not_prefixed_to_issuer():
         line("서울특별시 금천구청장", 311, 801, 1316, 905, 0.968),
     ]
     assert run(lines, lambda q: ("홍길동", 0.95)).fields["issuer"].value == "서울특별시 금천구청장"
+
+
+def _valid_rrn(front: str, gender: str, body: str) -> str:
+    d = [int(c) for c in front + gender + body]
+    check = (11 - sum(w * x for w, x in zip((2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5), d)) % 11) % 10
+    return f"{front}-{gender}{body}{check}"
+
+
+def test_checksum_ok_gives_no_warning():
+    rrn = _valid_rrn("800101", "2", "34567")
+    lines = [line(rrn, 145, 385, 772, 460, 0.999) if "-" in l.text else l for l in SPECIMEN]
+    ex = run(lines, lambda q: ("홍길동", 0.95))
+    assert ex.fields["rrn"].value == rrn and "CHECKSUM_MISMATCH:rrn" not in ex.warnings
+
+
+def test_one_low_confidence_digit_lowers_rrn_confidence():
+    rrn = _valid_rrn("800101", "2", "34567")
+    digits = rrn.replace("-", "")
+    w = (772 - 145) / 14
+    chars = [(c, 145 + i * w, 145 + (i + 1) * w) for i, c in enumerate(rrn)]
+    ocr = line(rrn, 145, 385, 772, 460, 0.97, chars=chars)
+    # 두 번째 숫자만 애매함
+    ocr = ocr.__class__(ocr.text, ocr.score, ocr.box, tuple(
+        c.__class__(c.text, 0.55 if i == 1 else c.score, c.box) for i, c in enumerate(ocr.chars)))
+    lines = [ocr if "-" in l.text else l for l in SPECIMEN]
+    ex = run(lines, lambda q: ("홍길동", 0.95))
+    assert ex.fields["rrn"].value.replace("-", "") == digits
+    assert ex.fields["rrn"].confidence == 0.55
+    assert decide(ex, RESIDENT_SPEC, Thresholds())[0] == Status.FAIL  # 핵심 필드 미채택
+
+
+def test_checksum_verified_rrn_accepted_at_lower_confidence():
+    rrn = _valid_rrn("800101", "2", "34567")
+    lines = [line(rrn, 145, 385, 772, 460, 0.70) if "-" in l.text else l for l in SPECIMEN]
+    ex = run(lines, lambda q: ("홍길동", 0.95))
+    assert ex.fields["rrn"].verified
+    assert decide(ex, RESIDENT_SPEC, Thresholds())[0] == Status.OK
+
+
+def test_checksum_mismatch_needs_normal_threshold():
+    lines = [line("800101-2345678", 145, 385, 772, 460, 0.70) if "-" in l.text else l for l in SPECIMEN]
+    ex = run(lines, lambda q: ("홍길동", 0.95))
+    assert not ex.fields["rrn"].verified
+    assert decide(ex, RESIDENT_SPEC, Thresholds())[0] == Status.FAIL
