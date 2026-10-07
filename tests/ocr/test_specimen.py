@@ -80,3 +80,18 @@ def test_resident_card_variants(engine, variant):
         assert f[key] == gt[key], key
     # 주소는 드문 글자 오인식(예: 륭→륨)이 있을 수 있어 유사도로 본다
     assert _similarity(f["address"], gt["address"]) >= 0.9
+
+
+@pytest.mark.parametrize("variant", list(VARIANTS))
+def test_driver_license_variants(engine, variant):
+    base, gt = _load("driver_license")
+    prepared = prepare(VARIANTS[variant](base), max_side_len=2000, max_pixels=40_000_000)
+    r = analyze(prepared, engine, Thresholds()).to_dict()
+
+    assert r["document_type"] == "DRIVER_LICENSE"
+    assert r["status"] in ("OK", "PARTIAL"), r["fail_reason"]
+    f = r["fields"]
+    for key in ("license_number", "license_types", "name", "rrn", "aptitude_period", "issue_date",
+                "serial_code", "issuer"):
+        assert f[key] == gt[key], key
+    assert _similarity(f["address"], gt["address"]) >= 0.85

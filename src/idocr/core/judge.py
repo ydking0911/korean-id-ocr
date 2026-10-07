@@ -22,7 +22,17 @@ RESIDENT_SPEC = DocSpec(
            "issue_date": "numeric", "issuer": "text"},
 )
 
-SPECS = {DocumentType.RESIDENT_CARD: RESIDENT_SPEC}
+LICENSE_SPEC = DocSpec(
+    fields=("license_number", "license_region", "license_types", "name", "rrn", "address", "address_lines",
+            "aptitude_period", "issue_date", "conditions", "serial_code", "issuer", "name_en", "birth_date_en"),
+    required=("license_number", "license_types", "name", "rrn", "address", "aptitude_period", "issue_date", "issuer"),
+    core=("name", "rrn", "license_number"),
+    kinds={"license_number": "numeric", "license_types": "text", "name": "text", "rrn": "numeric",
+           "address": "address", "address_lines": "address", "aptitude_period": "numeric",
+           "issue_date": "numeric", "serial_code": "numeric", "issuer": "text"},
+)
+
+SPECS = {DocumentType.RESIDENT_CARD: RESIDENT_SPEC, DocumentType.DRIVER_LICENSE: LICENSE_SPEC}
 
 
 @dataclass(frozen=True)

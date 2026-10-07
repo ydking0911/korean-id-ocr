@@ -13,7 +13,7 @@ import numpy as np
 
 from idocr.core import judge
 from idocr.core.classify import classify
-from idocr.core.extract import resident_card
+from idocr.core.extract import driver_license, resident_card
 from idocr.core.layout import to_lines
 from idocr.core.result import DocumentType, Extraction, FailReason, IdDocumentResult, Quad, Status
 from idocr.ocr.preprocess import PreparedImage
@@ -41,6 +41,12 @@ def _retry_order(first: "_Attempt") -> tuple[Pass, ...]:
     if first.title_low:
         return (ROT180, CONTRAST, ROT90, ROT270)
     return (CONTRAST, ROT90, ROT270, ROT180)
+
+
+EXTRACTORS = {
+    DocumentType.RESIDENT_CARD: resident_card.extract,
+    DocumentType.DRIVER_LICENSE: driver_license.extract,
+}
 
 
 @dataclass
@@ -79,8 +85,7 @@ def analyze(prepared: PreparedImage, engine, thresholds: judge.Thresholds,
     if best.n_lines == 0:
         return judge.failure(FailReason.NO_TEXT, preprocess)
     if best.extraction is None:
-        warnings = ["NOT_IMPLEMENTED:DRIVER_LICENSE"] if best.doc_type == DocumentType.DRIVER_LICENSE else []
-        return judge.failure(FailReason.UNSUPPORTED_DOCUMENT, preprocess, best.doc_type, warnings)
+        return judge.failure(FailReason.UNSUPPORTED_DOCUMENT, preprocess, best.doc_type)
 
     inv_scale = 1.0 / prepared.scale
 
@@ -103,12 +108,12 @@ def _run_pass(bgr: np.ndarray, p: Pass, engine, today) -> _Attempt:
     lines = to_lines(engine.run(img))
     doc_type, title = classify(lines)
 
-    extraction = None
-    if doc_type == DocumentType.RESIDENT_CARD:
-        def recognize(q: Quad):
-            crop = crop_quad(img, q)
-            return engine.recognize(crop) if crop is not None else ("", 0.0)
-        extraction = resident_card.extract(lines, title, recognize, today)
+    def recognize(q: Quad):
+        crop = crop_quad(img, q)
+        return engine.recognize(crop) if crop is not None else ("", 0.0)
+
+    extractor = EXTRACTORS.get(doc_type)
+    extraction = extractor(lines, title, recognize, today) if extractor else None
     title_low = title is not None and len(lines) >= 3 and title.cy > sorted(l.cy for l in lines)[len(lines) // 2]
     long_boxes = [l for l in lines if len(l.text) >= 3]
     vertical = bool(long_boxes) and sum(l.h > 1.5 * (l.x1 - l.x0) for l in long_boxes) > len(long_boxes) / 2

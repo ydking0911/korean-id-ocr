@@ -186,3 +186,85 @@ def repair_issuer(issuer: str) -> tuple[str, bool]:
 
 def issuer_is_valid(issuer: str) -> bool:
     return issuer.endswith(_ISSUER_SUFFIX) and len(issuer) >= 4
+
+
+# ── 운전면허 ─────────────────────────────────────────────
+
+# 면허번호 앞 2자리 지역코드 (docs/05-output-schema.md 3절)
+LICENSE_REGIONS = {
+    "11": "서울", "12": "부산", "13": "경기", "14": "강원", "15": "충북", "16": "충남", "17": "전북",
+    "18": "전남", "19": "경북", "20": "경남", "21": "제주", "22": "대구", "23": "인천", "24": "광주",
+    "25": "대전", "26": "울산", "28": "경기북부",
+}
+_REGION_CODE = {name: code for code, name in LICENSE_REGIONS.items()}
+
+_LICENSE_NO = re.compile(r"(?<!\d)(\d{2})\s*-\s*(\d{2})\s*-\s*(\d{6})\s*-\s*(\d{2})(?!\d)")
+# 구형: '서울 19-123456-61' (지역명 + 10자리)
+_LICENSE_NO_OLD = re.compile(r"(" + "|".join(sorted(_REGION_CODE, key=len, reverse=True)) + r")\s*"
+                             r"(\d{2})\s*-\s*(\d{6})\s*-\s*(\d{2})(?!\d)")
+
+
+@dataclass(frozen=True)
+class LicenseNo:
+    region: str  # 지역코드 2자리
+    year: str
+    serial: str
+    check: str
+    region_name_printed: str | None = None  # 구형 표기의 지역명
+
+    def formatted(self) -> str:
+        return f"{self.region}-{self.year}-{self.serial}-{self.check}"
+
+
+def find_license_numbers(text: str) -> list[LicenseNo]:
+    out = []
+    for m in _LICENSE_NO_OLD.finditer(text):
+        out.append(LicenseNo(_REGION_CODE[m.group(1)], m.group(2), m.group(3), m.group(4), m.group(1)))
+    if not out:
+        view = numeric_view(text)
+        out = [LicenseNo(*m.groups()) for m in _LICENSE_NO.finditer(view)]
+    return out
+
+
+def license_number_is_valid(no: LicenseNo) -> bool:
+    return no.region in LICENSE_REGIONS
+
+
+_LICENSE_TYPE = re.compile(r"([12])\s*종\s*(대\s*형|보\s*통|소\s*형|특\s*수|원\s*동\s*기)"
+                           r"(?:\s*[(（]?\s*(대형견인|소형견인|구난)\s*[)）]?)?")
+LICENSE_TYPES = {"1종대형", "1종보통", "1종소형", "1종특수", "2종보통", "2종소형", "2종원동기"}
+
+
+def find_license_types(text: str) -> list[str]:
+    """'1종 보통' → ['1종보통']. 특수면허는 '1종특수(대형견인)'."""
+    out = []
+    for m in _LICENSE_TYPE.finditer(text.replace("l", "1").replace("I", "1")):
+        kind = f"{m.group(1)}종{re.sub(r'\s', '', m.group(2))}"
+        if kind == "1종특수" and m.group(3):
+            kind += f"({m.group(3)})"
+        out.append(kind)
+    return out
+
+
+def license_type_is_valid(kind: str) -> bool:
+    return kind.split("(")[0] in LICENSE_TYPES
+
+
+_SERIAL = re.compile(r"[A-Z0-9]{6}")
+
+
+def find_serial_code(text: str) -> str | None:
+    """보안코드(암호일련번호): 영대문자·숫자 6자리, 문자와 숫자가 섞여 있음."""
+    s = re.sub(r"\s", "", text).upper()
+    if _SERIAL.fullmatch(s) and any(c.isdigit() for c in s) and any(c.isalpha() for c in s):
+        return s
+    return None
+
+
+def aptitude_kind(text: str) -> str | None:
+    h = re.sub(r"[^가-힣]", "", text)
+    if "적성" in h:
+        return "APTITUDE"
+    if "갱신" in h:
+        return "RENEWAL"
+    return None

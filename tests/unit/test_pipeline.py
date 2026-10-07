@@ -88,13 +88,15 @@ def test_unknown_document():
     assert r["fields"] == {}
 
 
-def test_driver_license_not_implemented_yet_does_not_retry():
-    lic = [line("자동차운전면허증(Driver's License)", 717, 72, 1475, 160)]
-    eng = ScriptedEngine([lic] * 4)
-    r = analyze(prepared(), eng, Thresholds(), today=TODAY).to_dict()
-    assert (r["status"], r["fail_reason"], r["document_type"]) == ("FAIL", "UNSUPPORTED_DOCUMENT", "DRIVER_LICENSE")
-    assert "NOT_IMPLEMENTED:DRIVER_LICENSE" in r["warnings"]
-    assert len(eng.calls) == 1
+def test_driver_license_contrast_retry_upgrades_partial_to_ok():
+    from tests.unit.test_driver_license import LICENSE_CONTRAST, LICENSE_ORIG
+
+    eng = ScriptedEngine([LICENSE_ORIG, LICENSE_CONTRAST])
+    r = analyze(prepared(h=995, w=1581), eng, Thresholds(), today=TODAY).to_dict()
+    assert (r["status"], r["document_type"]) == ("OK", "DRIVER_LICENSE")
+    assert (r["preprocess"]["contrast_enhanced"], r["preprocess"]["passes"]) == (True, 2)
+    assert r["fields"]["license_number"] == "11-15-003456-07"
+    assert set(r["fields"]) == set(r["field_meta"])
 
 
 def test_mask_rrn_option():
