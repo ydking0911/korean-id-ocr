@@ -34,7 +34,7 @@
 | 키 | 실물 표기 | 타입 / 정규화 | 필수 | 검증 |
 |---|---|---|---|---|
 | `name` | 성명 (한글) | string, 공백 제거 | ✅ | 한글 2~5자(외자·복성 고려, 예외는 경고만) |
-| `name_hanja` | 성명 옆 괄호 안 한자 | string \| null | | 한자 범위 |
+| `name_hanja` | 성명 옆 괄호 안 한자 | string \| null — **best-effort**, 인식 못 하면 `null` (status에 영향 없음) | | 한자 범위 |
 | `rrn` | 주민등록번호 | `"YYMMDD-NNNNNNN"` | ✅ | 6+7자리, 생년월일 유효성, 뒷자리 첫 숫자 0~9 |
 | `address` | 주소 (여러 줄) | string, 줄 결합 | ✅ | 시/도 명칭으로 시작하는지 (경고만) |
 | `address_lines` | 주소 원 줄 구분 | string[] | | |
