@@ -1,8 +1,10 @@
 # 문서 목록
 
-주민등록증/운전면허증 OCR → 구조화 → 성인 판정 서비스 설계 문서. (디스코드 봇은 별도 레포)
+CPU 기반 신분증(주민등록증/운전면허증) OCR worker → 구조화 JSON 설계 문서.
 
 1. [01-research.md](01-research.md) — RapidOCR 최신 API, 모델 파일 확인 결과
-2. [02-architecture.md](02-architecture.md) — 범위, 프로젝트 구조, 처리 흐름, 파인튜닝 방침, 단계별 계획
+2. [02-architecture.md](02-architecture.md) — 범위, 구조, API, 운영 구성, MySQL, 단계별 계획
 3. [03-open-questions.md](03-open-questions.md) — 결정 로그와 남은 질문
-4. [04-runtime-and-language.md](04-runtime-and-language.md) — 운영 서버(좋은 코어 vs 많은 코어), Python vs Java
+4. [04-runtime-and-language.md](04-runtime-and-language.md) — 운영 서버, Python 선택 근거
+5. [05-output-schema.md](05-output-schema.md) — 주민등록증/운전면허증 구조화 응답 스키마
+6. [06-finetuning.md](06-finetuning.md) — 참고 레포(ai-ocr-finetuning) 분석, 벤치마크, 파인튜닝 계획
