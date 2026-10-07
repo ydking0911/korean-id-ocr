@@ -69,7 +69,7 @@ korean-id-ocr/
 | `POST /v1/ocr/id` | 이미지 → 05 문서의 구조화 JSON. `document_type` 힌트(선택) |
 | `GET /healthz` / `/readyz` | 프로세스 생존 / 모델 로드 완료 |
 
-- 입력: multipart `image` (JPEG/PNG/WebP, 크기 상한 설정).
+- 입력: **요청 본문 그대로**(raw body, `Content-Type: image/jpeg|png|webp`). multipart는 Starlette가 1MB 초과 시 임시 파일로 디스크에 쓰므로 받지 않는다. 크기 상한 설정 (`IDOCR_MAX_IMAGE_BYTES`, 기본 10MB).
 - `/v1/ocr/raw`는 `ENABLE_RAW_ENDPOINT` 설정으로 켜고 끔 (개발에서만 켬).
 - 호출 서비스는 같은 호스트의 Docker 밖에 있음 → 포트를 `127.0.0.1`에만 publish하는 정도로 두고, 연동·인증은 범위 밖.
 - 처리: `await run_in_executor(pool, analyze, bytes)` → 응답 후 `bytes` 참조 해제.
@@ -82,7 +82,7 @@ korean-id-ocr/
   onnxruntime `enable_cpu_mem_arena=false`(rapidocr 기본값) 유지해 메모리 증가를 억제.
 - 모델은 이미지에 포함(런타임 외부 다운로드 없음). read-only rootfs, non-root, 코어 덤프 off.
 
-## 5. 단계별 계획
+## 5. 단계별 계획 (진행 현황은 09 문서)
 
 | 단계 | 내용 | 완료 기준 |
 |---|---|---|

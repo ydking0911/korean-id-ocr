@@ -7,7 +7,7 @@
 
 ```jsonc
 {
-  "request_id": "01J...",                 // ULID
+  "request_id": "2697051495a044929b4fb6b7b037ce96",  // UUID4 hex
   "status": "OK",                         // OK | PARTIAL | FAIL
   "document_type": "RESIDENT_CARD",       // RESIDENT_CARD | DRIVER_LICENSE | UNKNOWN
   "document_side": "FRONT",               // FRONT | BACK | UNKNOWN

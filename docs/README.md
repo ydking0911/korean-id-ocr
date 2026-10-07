@@ -9,3 +9,5 @@ CPU 기반 신분증(주민등록증/운전면허증) OCR worker → 구조화 J
 5. [05-output-schema.md](05-output-schema.md) — 주민등록증/운전면허증 구조화 응답 스키마
 6. [06-finetuning.md](06-finetuning.md) — 파인튜닝 필요성 판단, 참고 레포(ai-ocr-finetuning) 분석
 7. [07-reference-ocr-ai-module.md](07-reference-ocr-ai-module.md) — 참고 레포(ocr-ai-module) 분석
+8. [08-reference-id-ocr-project.md](08-reference-id-ocr-project.md) — 참고 레포(ID-OCR-PROJECT, YOLOv5+EasyOCR) 분석
+9. [09-roadmap.md](09-roadmap.md) — **로드맵 및 진행 현황**
