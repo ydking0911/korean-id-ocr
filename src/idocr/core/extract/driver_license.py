@@ -43,7 +43,11 @@ def extract(lines: list[Line], title: Line | None, recognize: Recognizer | None 
     period_lines, label = _find_aptitude_period(lines, rrn_line, in_column, fields, derived, today)
     date_line = _find_issue_date(lines, rrn_line, period_lines, fields, rrn, today)
 
-    stop = label or (period_lines[0] if period_lines else None) or date_line
+    # 주소는 적성검사 라벨·날짜 줄 전까지. 라벨을 못 읽어도(흐린 사진) 첫 날짜 줄에서 끊는다
+    first_dated = next((l for l in sorted(lines, key=lambda l: l.cy)
+                        if l.is_below(rrn_line) and in_column(l) and T.find_dates(l.text)), None)
+    stops = [l for l in (label, first_dated, date_line) if l is not None]
+    stop = min(stops, key=lambda l: l.cy) if stops else None
     body = [l for l in lines if l.is_below(rrn_line) and in_column(l) and (stop is None or l.is_above(stop))]
     fields["address"], fields["address_lines"] = read_address(body)
 

@@ -59,12 +59,12 @@ def test_keeps_earlier_partial_when_later_passes_worse():
 
 
 def test_rotated_card_found_on_rot90_and_boxes_mapped_back():
-    # 세로로 찍힌 카드: 원본에서 문서를 못 알아보면 대비 보정보다 회전을 먼저 시도
-    eng = ScriptedEngine([[], SPECIMEN])
+    # 원본에서 아무것도 못 읽으면 회전을 먼저 시도 (180° → 90° → 270° → 대비 보정)
+    eng = ScriptedEngine([[], [], SPECIMEN])
     r = analyze(prepared(h=1573, w=1000), eng, Thresholds(), today=TODAY).to_dict()
     assert r["status"] == "OK"
-    assert (r["preprocess"]["rotation"], r["preprocess"]["passes"]) == (90, 2)
-    assert eng.calls[1] == (1000, 1573)  # 회전된 이미지로 호출
+    assert (r["preprocess"]["rotation"], r["preprocess"]["passes"]) == (90, 3)
+    assert eng.calls[2] == (1000, 1573)  # 회전된 이미지로 호출
     # 회전 좌표 (145,385) → 원본 좌표 (385, 1573-1-145)
     box = r["field_meta"]["rrn"]["bbox"]
     assert box[0] == [385, 1427]

@@ -37,7 +37,8 @@ def _retry_order(first: "_Attempt") -> tuple[Pass, ...]:
     if first.vertical:
         return (ROT90, ROT270, CONTRAST, ROT180)
     if first.doc_type == DocumentType.UNKNOWN:
-        return (ROT90, ROT270, ROT180, CONTRAST)
+        # 세로로 눕지 않았는데 문서를 못 알아봄 → 뒤집힌 사진일 가능성이 가장 큼
+        return (ROT180, ROT90, ROT270, CONTRAST)
     if first.title_low:
         return (ROT180, CONTRAST, ROT90, ROT270)
     return (CONTRAST, ROT90, ROT270, ROT180)

@@ -179,3 +179,10 @@ def test_police_issuer_snapped_to_closed_set():
     assert ex.fields["issuer"].value == "경기남부지방경찰청장"
     assert ex.fields["issuer"].valid
     assert ex.warnings.count("REPAIRED:issuer") == 1
+
+
+def test_address_stops_at_dates_when_label_unreadable():
+    # 흐린 사진: '적성검사' 라벨을 못 읽어도 날짜 줄이 주소에 붙지 않아야 한다
+    lines = [l for l in LICENSE_CONTRAST if l.text not in ("적성검사", "기", "간")]
+    ex = run(lines)
+    assert ex.fields["address_lines"].value == ["서울특별시 가산디지털1로", "(대륨테크노타운18차)", "18차20층"]

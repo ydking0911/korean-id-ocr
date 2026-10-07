@@ -16,7 +16,9 @@ class Settings(BaseSettings):
     rec_model: str = "korean_PP-OCRv5_rec_mobile.onnx"
     rec_keys: str = "ppocrv5_korean_dict.txt"
     cls_model: str = "ch_ppocr_mobile_v2.0_cls_mobile.onnx"
-    use_cls: bool = True
+    # 줄 단위 방향 분류(0°/180°). 짧은 줄(이름 등)을 뒤집힌 것으로 오판해 기본으로 끈다.
+    # 뒤집힌 사진은 파이프라인의 180° 재시도 패스가 처리한다 (docs/09-roadmap.md 4단계 기록)
+    use_cls: bool = False
 
     # 동시성: ocr_workers × ort_intra_threads ≤ 코어 수 권장
     ocr_workers: int = 2
