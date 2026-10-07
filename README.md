@@ -26,7 +26,7 @@ curl --data-binary @image.jpg -H "Content-Type: image/jpeg" http://127.0.0.1:800
 curl --data-binary @image.jpg -H "Content-Type: image/jpeg" http://127.0.0.1:8000/v1/ocr/raw
 ```
 
-지원 문서: 주민등록증 앞면 (운전면허증 앞면은 3단계). 응답 형식은 [`docs/05-output-schema.md`](docs/05-output-schema.md).
+지원 문서: 주민등록증 앞면, 운전면허증 앞면. 응답 형식은 [`docs/05-output-schema.md`](docs/05-output-schema.md).
 
 ## 로컬 개발
 
