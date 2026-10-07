@@ -130,6 +130,7 @@ curl --data-binary @id.jpg -H "Content-Type: image/jpeg" http://127.0.0.1:8000/v
 | `IDOCR_QUEUE_LIMIT` | `16` | 동시 대기 요청 상한 (초과 시 503) |
 | `IDOCR_REQUEST_TIMEOUT_S` | `30` | 요청 처리 시간 상한 (초과 시 504) |
 | `IDOCR_REQUIRE_HANGUL` | `true` | 인식 모델에 한글이 없으면 기동 거부 (잘못된 모델 로드 방지) |
+| `IDOCR_USE_CLS` | `false` | 줄 단위 방향 분류. 짧은 줄을 뒤집힌 것으로 오판해 끔 (뒤집힌 사진은 180° 재시도가 처리) |
 | `IDOCR_MODEL_DIR` | `models` | 모델 디렉터리 |
 | `IDOCR_LOG_LEVEL` | `INFO` | 로그 레벨 |
 
