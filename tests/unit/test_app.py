@@ -50,7 +50,8 @@ def test_raw_ocr_returns_lines(jpeg_bytes):
     assert r.status_code == 200
     body = r.json()
     assert body["lines"][0]["text"] == "주민등록증"
-    assert body["image"] == {"width": 320, "height": 200, "scale": 1.0, "exif_rotated": False}
+    # 320px짜리 작은 이미지는 긴 변 1000px로 확대해 인식한다 (박스는 원본 좌표로 되돌림)
+    assert body["image"] == {"width": 320, "height": 200, "scale": 3.125, "exif_rotated": False}
     assert body["model"]["rec"] == "rec.onnx@sha256:bbb"
     assert len(body["request_id"]) == 32
 

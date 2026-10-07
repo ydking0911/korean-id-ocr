@@ -101,7 +101,8 @@ def run(items: list[dict], settings: Settings) -> list[dict]:
         data = Path(item["image"]).read_bytes()
         started = time.perf_counter()
         try:
-            prepared = prepare(data, max_side_len=settings.max_side_len, max_pixels=settings.max_image_pixels)
+            prepared = prepare(data, max_side_len=settings.max_side_len, max_pixels=settings.max_image_pixels,
+                               min_side_len=settings.min_side_len)
             with pool.acquire() as engine:
                 result = analyze(prepared, engine, th).to_dict()
         except ImageDecodeError:

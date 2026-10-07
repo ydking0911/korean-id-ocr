@@ -190,7 +190,8 @@ async def _run_job(rt: _Runtime, job, data: bytes):
 
 
 def _prepare(rt: _Runtime, data: bytes):
-    return prepare(data, max_side_len=rt.settings.max_side_len, max_pixels=rt.settings.max_image_pixels)
+    return prepare(data, max_side_len=rt.settings.max_side_len, max_pixels=rt.settings.max_image_pixels,
+                   min_side_len=rt.settings.min_side_len)
 
 
 def _raw_job(rt: _Runtime, data: bytes):

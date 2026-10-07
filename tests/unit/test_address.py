@@ -56,3 +56,17 @@ def test_extra_lexicon_corrects_road_and_building(tmp_path):
     lex = load_lexicon(str(words))
     c = correct_address("서울특별시 강남구 테혜란로 1 (대륨테크노타운)", lex)
     assert c.text == "서울특별시 강남구 테헤란로 1 (대륭테크노타운)"
+
+
+def test_sido_inferred_from_unique_sgg():
+    c = correct_address("성울병신 종로구 은천로 93")
+    assert c.valid and c.text == "서울특별시 종로구 은천로 93"
+
+
+def test_sido_not_inferred_from_shared_sgg():
+    assert not correct_address("성울병신 중구 세종대로 1").valid  # 중구는 여러 시·도에 있다
+
+
+def test_legal_dong_in_parentheses_not_forced_to_admin_dong():
+    # 사전은 행정동뿐이라 '봉전동'(법정동 봉천동의 오인식)을 행정동 '봉선동'으로 바꾸면 안 된다
+    assert "(봉전동," in correct_address("서울특별시 관악구 은천로 93 (봉전동,진달래아파트)").text

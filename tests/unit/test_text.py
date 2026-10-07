@@ -152,3 +152,27 @@ def test_partially_masked_rrn():
 )
 def test_license_types_real_layout(raw, kinds):
     assert T.find_license_types(raw) == kinds
+
+
+def test_seven_digit_run_is_not_a_masked_rrn():
+    # 박스가 '820701' / '2345678'로 쪼개졌을 때 뒷자리만 있는 줄을 '234567-8'로 읽으면 안 된다
+    assert T.find_rrns("2345678") == []
+    assert T.find_rrns("1234567890") == []
+
+
+def test_rrn_without_hyphen_and_masked_with_x():
+    assert T.find_rrns("8207012345678")[0].back_rest == "345678"
+    r = T.find_rrns("981032-50200XX")[0]
+    assert (r.gender_digit, r.back_rest) == ("5", None)
+
+
+@pytest.mark.parametrize("raw,iso", [("2019.1 28", "2019-01-28"), ("2033,01.01.", "2033-01-01"),
+                                     ("2022.3.30.", "2022-03-30")])
+def test_tolerant_date_separators(raw, iso):
+    assert T.find_dates(raw)[0].iso == iso
+
+
+@pytest.mark.parametrize("raw,expected", [("2종보동2종소형 원동기", ["2종보통", "2종소형", "2종원동기"]),
+                                          ("1종보통 2보통", ["1종보통", "2종보통"])])
+def test_fuzzy_license_kinds(raw, expected):
+    assert T.find_license_types(raw) == expected

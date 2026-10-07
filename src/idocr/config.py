@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     max_image_bytes: int = 10 * 1024 * 1024
     max_image_pixels: int = 40_000_000
     max_side_len: int = 2000
+    # 긴 변이 이보다 작으면 확대 (작은 사진의 인식률 개선)
+    min_side_len: int = 1000
 
     # /v1/ocr/raw는 원문(주민번호 전체 포함)을 돌려주므로 운영에서는 끈다
     enable_raw_endpoint: bool = False

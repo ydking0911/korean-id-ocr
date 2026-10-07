@@ -6,7 +6,7 @@ from typing import Callable
 from idocr.config import get_settings
 from idocr.core import text as T
 from idocr.core.address import correct_address, fix_spacing, load_lexicon
-from idocr.core.layout import Line, chars_box, leading_chars, rows, trailing_chars_after, union_box
+from idocr.core.layout import Line, chars_box, leading_chars, merge_row, rows, trailing_chars_after, union_box
 from idocr.core.result import FieldValue, Quad
 
 Recognizer = Callable[[Quad], tuple[str, float]]
@@ -14,6 +14,9 @@ Recognizer = Callable[[Quad], tuple[str, float]]
 
 def find_rrn(lines: list[Line], warnings: list[str], today: date) -> tuple[Line | None, T.Rrn | None, FieldValue | None]:
     found = [(l, r) for l in lines for r in T.find_rrns(l.text)]
+    if not found:
+        # 앞·뒷자리가 두 박스로 쪼개진 경우 (하이픈이 흐려 검출이 끊김): 같은 줄을 합쳐 다시 찾는다
+        found = [(m, r) for row in rows(lines) if len(row) > 1 for m in [merge_row(row)] for r in T.find_rrns(m.text)]
     if not found:
         return None, None, None
     line, rrn = found[0]
@@ -61,6 +64,12 @@ def read_address(body: list[Line], warnings: list[str] | None = None) -> tuple[F
     if not body:
         return None, None
     grouped = rows(body)
+    # 발급일을 못 찾았을 때 대비: 발급기관처럼 끝나는 줄부터는 주소가 아니다
+    for i, row in enumerate(grouped):
+        if i > 0 and T.issuer_is_valid(T.repair_issuer(" ".join(l.text for l in row))[0]):
+            grouped = grouped[:i]
+            break
+    body = [l for row in grouped for l in row]
     texts = [" ".join(T.collapse_spaces(l.text) for l in row) for row in grouped]
     texts[0] = T.space_after_sido(texts[0])
     texts = [fix_spacing(t) for t in texts]
@@ -82,6 +91,11 @@ def read_address(body: list[Line], warnings: list[str] | None = None) -> tuple[F
             FieldValue(texts, conf, boxes, corr.valid))
 
 
+def _has_issuer_prefix(row: list[Line]) -> bool:
+    texts = [l.text for l in row if T.HANGUL.search(l.text)]
+    return any(T.issuer_is_valid(T.repair_issuer(" ".join(texts[:i]))[0]) for i in range(1, len(texts) + 1))
+
+
 def read_issuer(lines: list[Line], date_line: Line, warnings: list[str]) -> FieldValue | None:
     """발급일 줄 뒤(같은 박스 → 같은 줄 오른쪽 → 아래 줄 순)에서 발급기관을 찾는다."""
     rest = T.text_after_numbers(date_line.text)
@@ -92,10 +106,15 @@ def read_issuer(lines: list[Line], date_line: Line, warnings: list[str]) -> Fiel
         right = [l for l in lines if l.same_row(date_line) and l.x0 > date_line.x1]
         below = rows([l for l in lines if l.is_below(date_line)])
         candidates = [right] + below if right else below
-        row = next((r for r in candidates if len(T.HANGUL.findall("".join(l.text for l in r))) >= 3), None)
+        hangul = [r for r in candidates if len(T.HANGUL.findall("".join(l.text for l in r))) >= 3]
+        # 발급기관으로 끝나는 줄 우선 (같은 줄 오른쪽의 직인 노이즈 '영록특별시'보다 아래 '행복특별시 행복구청장')
+        row = next((r for r in hangul if _has_issuer_prefix(r)), hangul[0] if hangul else None)
         if row is None:
             return None
         parts = [(l.text, l.score, l.box) for l in row]
+    # 앞에 붙은 숫자만 있는 박스 제외 (신형 주민등록증 좌하단 고스트 이미지의 생년월일 '981032' 등)
+    while len(parts) > 1 and not T.HANGUL.search(parts[0][0]):
+        parts = parts[1:]
 
     # 왼쪽부터 이어 붙이다 발급기관 접미사가 완성되면 멈춘다 (오른쪽 직인·배경 노이즈 박스 배제)
     used = []

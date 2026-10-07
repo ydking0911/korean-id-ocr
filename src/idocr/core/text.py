@@ -44,7 +44,12 @@ def text_after_numbers(text: str) -> str:
 
 # 앞 6 + (구분자) + 뒤 7. 뒷자리 2~7번째는 가려져 있을 수 있다(*, X, ●, 누락)
 # 뒷자리 2~7번째는 전부·일부 가려져 있을 수 있다 ('2******', '20200XX', 스티커로 가려 누락)
-_RRN = re.compile(r"(?<!\d)(\d{6})\s*-?\s*([0-9])([0-9]{6}|[0-9*xX●•]{6}|[*xX●•]{0,6})(?!\d)")
+_MASKCH = "*xX●•"
+# 하이픈 있음: 전체 / 일부 가림 / 스티커로 가려 뒷자리 누락('800101-2')
+_RRN_HY = re.compile(rf"(?<!\d)(\d{{6}})\s*-\s*([0-9])([0-9{_MASKCH}]{{6}}|[{_MASKCH}]{{0,5}})(?![\d{_MASKCH}])")
+# 하이픈 없음(또는 두 박스로 쪼개져 공백): 13자리 숫자, 또는 가림 문자가 섞인 경우만.
+# 가림 문자 없는 7자리('2345678', 주소의 '9371203')를 가린 주민번호로 오인하지 않게 한다
+_RRN_NOHY = re.compile(rf"(?<!\d)(\d{{6}})\s*([0-9])([0-9{_MASKCH}]{{6}})(?![\d{_MASKCH}])")
 _CENTURY = {"1": 1900, "2": 1900, "5": 1900, "6": 1900, "3": 2000, "4": 2000, "7": 2000, "8": 2000,
             "9": 1800, "0": 1800}
 
@@ -73,11 +78,15 @@ class Rrn:
 
 def find_rrns(text: str) -> list[Rrn]:
     view = numeric_view(text)
-    found = []
-    for m in _RRN.finditer(view):
-        rest = m.group(3)
-        found.append(Rrn(m.group(1), m.group(2), rest if len(rest) == 6 and rest.isdigit() else None))
-    return found
+    found, spans = [], []
+    for pat in (_RRN_HY, _RRN_NOHY):
+        for m in pat.finditer(view):
+            if any(a < m.end() and m.start() < b for a, b in spans):
+                continue
+            spans.append(m.span())
+            rest = m.group(3)
+            found.append((m.start(), Rrn(m.group(1), m.group(2), rest if len(rest) == 6 and rest.isdigit() else None)))
+    return [r for _, r in sorted(found, key=lambda x: x[0])]
 
 
 def rrn_is_valid(rrn: Rrn, today: date | None = None) -> bool:
@@ -99,7 +108,8 @@ def rrn_derived(rrn: Rrn) -> dict:
 
 # ── 날짜 ─────────────────────────────────────────────────
 
-_DATE = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{1,2})(?:\s*\.)?(?!\d)")
+# 구분자는 '.', '-', '/' 외에 쉼표 오인식('2033,01.01.'), 둘째 구분자 누락('2019.1 28')도 허용
+_DATE = re.compile(r"(?<!\d)((?:19|20)\d{2})\s*[.,\-/]\s*(\d{1,2})\s*[.,\-/\s]\s*(\d{1,2})(?:\s*[.,])?(?!\d)")
 
 
 @dataclass(frozen=True)
@@ -270,7 +280,19 @@ def license_number_is_valid(no: LicenseNo) -> bool:
 LICENSE_TYPES = {"1종대형", "1종보통", "1종소형", "1종특수", "2종보통", "2종소형", "2종원동기"}
 
 
-_KIND = re.compile(r"(?:([12])\s*종\s*)?(대\s*형|보\s*통|소\s*형|특\s*수|원\s*동\s*기)(?:\s*[(（]([^)）]*)[)）])?")
+_KIND = re.compile(r"(?:(?<!\d)([12])\s*종?\s*)?([가-힣]{2,3})(?:\s*[(（]([^)）]*)[)）])?")
+_KIND_NAMES = ("대형", "보통", "소형", "특수", "원동기")
+
+
+def _kind_name(word: str) -> str | None:
+    """'보통'·'보동'(한 글자 오인식) → '보통'. 면허종류가 아니면 None."""
+    from idocr.core.address import jamo_distance
+
+    w = re.sub(r"\s", "", word)
+    if w in _KIND_NAMES:
+        return w
+    near = [k for k in _KIND_NAMES if len(k) == len(w) and jamo_distance(w, k) <= 1]
+    return near[0] if len(near) == 1 else None
 _SPECIAL = ("대형견인", "소형견인", "구난")
 
 
@@ -281,7 +303,9 @@ def find_license_types(text: str) -> list[str]:
     out: list[str] = []
     last = None
     for m in _KIND.finditer(text.replace("l", "1").replace("I", "1")):
-        kind = re.sub(r"\s", "", m.group(2))
+        kind = _kind_name(m.group(2))
+        if kind is None:
+            continue
         grade = m.group(1) or {"특수": "1", "원동기": "2"}.get(kind) or last
         if grade is None:
             continue

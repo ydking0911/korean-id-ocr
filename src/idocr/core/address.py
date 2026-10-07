@@ -54,6 +54,9 @@ class Lexicon:
     sgg: dict[str, frozenset[str]]
     extra: frozenset[str] = field(default_factory=frozenset)  # 도로명·건물명 (선택)
 
+    def sido_of_sgg(self, name: str) -> set[str]:
+        return {sido for sido, names in self.sgg.items() if name in names}
+
     def sgg_of(self, sido: str) -> frozenset[str]:
         return self.sgg.get(sido, frozenset())
 
@@ -100,6 +103,7 @@ _SPACING = [
     (re.compile(r"(?<=[\d가-힣])(?=\()"), " "),                 # 74(주공 → 74 (주공
     (re.compile(r"(?<=\))(?=[\d가-힣])"), " "),                 # )115동 → ) 115동
     (re.compile(r"(?<=[가-힣])(?=\d+차\))"), " "),              # 대륭테크노타운18차) → 대륭테크노타운 18차)
+    (re.compile(r"(?<=[가-힣]동)(?=\d)"), " "),                 # (미근동209) → (미근동 209)
 ]
 
 
@@ -136,12 +140,22 @@ def correct_address(text: str, lex: Lexicon | None = None) -> Correction:
     else:
         sido_ok = bool(tokens) and fix(0, lex.sido, 2)
         canonical = tokens[0] if sido_ok else None
+    # 시·도가 심하게 깨졌어도('성울병신 종로구') 시·군·구가 한 시·도에만 있으면 거꾸로 맞춘다
+    if not sido_ok and len(tokens) > 1 and T_HANGUL.search(tokens[0]) and _looks_like_sgg(tokens[1]):
+        owners = lex.sido_of_sgg(tokens[1])
+        current = {o for o in owners if o in _CURRENT_SIDO}
+        if len(current) == 1:
+            (canonical,) = current
+            changed.append((tokens[0], canonical))
+            tokens[0] = canonical
+            sido_ok = True
     # 시·군·구는 '시·군·구'로 끝나는 토큰만 교정한다 ('중앙로'가 '중앙구'로 바뀌지 않게)
     if sido_ok and len(tokens) > 1 and _looks_like_sgg(tokens[1]):
         sggs = lex.sgg_of(canonical)
         if fix(1, sggs, 1) and len(tokens) > 2 and tokens[1].endswith("시") and _looks_like_sgg(tokens[2]):
             fix(2, sggs, 1)  # 일반구가 있는 시: '성남시 분당구'
-
+    # 괄호 안 동 이름은 교정하지 않는다: 사전은 행정동인데 주소에는 법정동('봉천동')이 쓰여
+    # 비슷한 행정동('봉선동')으로 잘못 바뀐다. 법정동 사전이 생기면 IDOCR_ADDRESS_LEXICON으로 넣는다.
 
     if lex.extra:
         for i, t in enumerate(tokens):
@@ -156,6 +170,10 @@ def correct_address(text: str, lex: Lexicon | None = None) -> Correction:
 
 
 T_HANGUL = re.compile(r"[가-힣]")
+# 현행 시·도 (역추론은 현행 이름으로만)
+_CURRENT_SIDO = {"서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시", "울산광역시",
+                 "세종특별자치시", "경기도", "강원특별자치도", "충청북도", "충청남도", "전북특별자치도", "전라남도",
+                 "경상북도", "경상남도", "제주특별자치도"}
 
 
 def _looks_like_sgg(token: str) -> bool:

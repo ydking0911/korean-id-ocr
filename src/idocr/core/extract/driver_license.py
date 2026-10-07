@@ -147,7 +147,8 @@ def _find_issue_date(lines, rrn_line, period_lines, fields, rrn, today):
     return line
 
 
-_CONDITION = re.compile(r"조\s*건\s*[:：;]?\s*(.*)$")
+# '조 건 : A'. 작은 사진에서는 '건'이 빠지거나 ':'가 붙어 읽히기도 한다 ('조', 'RP모')
+_CONDITION = re.compile(r"^조\s*(?:건)?\s*[:：;]?\s*(.+)$")
 
 
 def _find_conditions(lines, rrn_line, fields):
@@ -155,9 +156,9 @@ def _find_conditions(lines, rrn_line, fields):
     라벨이 없으면 null (조건 없는 면허증과 못 읽은 경우를 구분할 수 없음)."""
     # 같은 높이 오른쪽의 보안코드(작은 사진 아래)가 섞이지 않게 본문 열만
     for row in rows([l for l in lines if l.is_below(rrn_line) and l.x0 < rrn_line.x1]):
-        text = " ".join(l.text for l in sorted(row, key=lambda l: l.x0))
+        text = " ".join(l.text for l in sorted(row, key=lambda l: l.x0)).strip()
         m = _CONDITION.search(text)
-        if m:
+        if m and len(m.group(1)) <= 12:
             codes = [c for c in re.split(r"[,·\s]+", m.group(1)) if c]
             fields["conditions"] = FieldValue(codes, min(l.score for l in row),
                                               [union_box([l.box for l in row])], True)

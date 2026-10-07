@@ -91,6 +91,16 @@ def rows(lines: list[Line]) -> list[list[Line]]:
     return [sorted(r, key=lambda l: l.x0) for r in out]
 
 
+def merge_row(row: list[Line]) -> Line:
+    """같은 줄의 박스들을 한 줄로 합친다 (예: '820701' + '2345678')."""
+    row = sorted(row, key=lambda l: l.x0)
+    if len(row) == 1:
+        return row[0]
+    geo = union_box([l.geo for l in row]) if all(l.geo for l in row) else None
+    return Line(" ".join(l.text for l in row), min(l.score for l in row), union_box([l.box for l in row]),
+                tuple(c for l in row for c in l.chars), geo)
+
+
 def rect(x0: float, y0: float, x1: float, y1: float) -> Quad:
     return [[round(x0, 1), round(y0, 1)], [round(x1, 1), round(y0, 1)],
             [round(x1, 1), round(y1, 1)], [round(x0, 1), round(y1, 1)]]

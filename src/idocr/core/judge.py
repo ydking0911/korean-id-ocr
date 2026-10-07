@@ -29,7 +29,7 @@ LICENSE_SPEC = DocSpec(
     core=("name", "rrn", "license_number"),
     kinds={"license_number": "numeric", "license_types": "text", "name": "text", "rrn": "numeric",
            "address": "address", "address_lines": "address", "aptitude_period": "numeric",
-           "issue_date": "numeric", "serial_code": "numeric", "issuer": "text"},
+           "issue_date": "numeric", "serial_code": "numeric", "issuer": "text", "conditions": "text"},
 )
 
 SPECS = {DocumentType.RESIDENT_CARD: RESIDENT_SPEC, DocumentType.DRIVER_LICENSE: LICENSE_SPEC}
