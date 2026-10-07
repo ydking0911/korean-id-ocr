@@ -143,6 +143,7 @@ curl --data-binary @id.jpg -H "Content-Type: image/jpeg" http://127.0.0.1:8000/v
 | `IDOCR_REQUIRE_HANGUL` | `true` | 인식 모델에 한글이 없으면 기동 거부 (잘못된 모델 로드 방지) |
 | `IDOCR_USE_CLS` | `false` | 줄 단위 방향 분류. 짧은 줄을 뒤집힌 것으로 오판해 끔 (뒤집힌 사진은 180° 재시도가 처리) |
 | `IDOCR_MODEL_DIR` | `models` | 모델 디렉터리 |
+| `IDOCR_ADDRESS_LEXICON` | 없음 | 주소 교정용 추가 사전 (도로명·건물명 단어 목록 파일) |
 | `IDOCR_LOG_LEVEL` | `INFO` | 로그 레벨 |
 
 </details>
@@ -232,4 +233,5 @@ python -m tools.evaluate --data samples/synthetic   # → samples/eval/latest/re
 ## 🙏 사용한 오픈소스
 
 - [RapidOCR](https://github.com/RapidAI/RapidOCR) · [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) (PP-OCRv5 모델, Apache-2.0)
+- [admdongkor](https://github.com/vuski/admdongkor) — 행정구역 이름 사전 (CC BY 4.0, `src/idocr/data/admin_names.json`)
 - [ONNX Runtime](https://onnxruntime.ai/) · [FastAPI](https://fastapi.tiangolo.com/) · [OpenCV](https://opencv.org/) · [Pillow](https://python-pillow.org/)
