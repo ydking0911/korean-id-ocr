@@ -20,6 +20,8 @@
 | `/v1/ocr/raw` | ✅ | 개발에서만 켜고 운영에선 설정으로 끔 |
 | 파인튜닝 | ✅ | **기본 계획에서 제외.** 평가 하네스로 실패 원인을 본 뒤 인식 모델의 일관된 오인식이 주원인일 때만 (06 문서 3절) |
 | 참고 레포 벤치마크 | ✅ | 우선순위 낮음(선택). `ocr-ai-module`은 OCR 모델이 없어 대상 아님 (07 문서) |
+| 모델 조합 | ✅ | RapidOCR 공식: v5 mobile det + v5 korean rec + v2 cls. 모델 경로 항상 명시 (01 문서 2절). v6 det small·v5 server det는 비교 후보 |
+| `name_hanja` | ✅ | nullable best-effort |
 | 구조화 스키마 | 🟡 | 05 문서 추천안 v1 — 검토 필요 |
 | 이미지 품질 사전 검사 | 🟡 | 선명도·밝기 기준 미달이면 OCR 생략하고 `IMAGE_TOO_BLURRY` 등 반환 (07 문서) |
 
@@ -33,9 +35,3 @@
 ### Q2. 이미지 품질 사전 검사
 흐린 사진을 OCR 전에 거부할지, 일단 OCR을 돌리고 결과로만 판단할지.
 추천: 사전 검사는 **경고만**(`warnings: ["BLURRY"]`) 내고 OCR은 진행 → 임계값을 데이터로 정한 뒤 거부로 전환.
-
-### Q3. 모델 파일 확인 (01 문서 2절)
-개발 PC에서 `monkt/paddleocr-onnx` 파일 목록 확인 필요 (이 작업 환경은 HF 차단).
-- `det.onnx` ~84MB가 server 모델인지 → CPU 지연에 영향. mobile det도 같이 받아 비교 추천
-- RapidOCR 공식 배포(`korean_PP-OCRv5_rec_mobile`)와 같은 모델인지
-- 한국어 dict에 성명 한자가 얼마나 들어 있는지 (한자 성명 인식 가능 여부)

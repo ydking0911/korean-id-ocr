@@ -43,42 +43,60 @@ scores = out.scores or ()
    `Rec.rec_keys_path`가 반드시 필요하다. 둘 다 없으면 초기화 에러.
 4. **로깅**: rapidocr 내부 로거는 기본 `info` 레벨이고 `logger.warning(e)`로 예외를 그대로 찍는 곳이 있다.
    현재 코드상 OCR 텍스트를 직접 로그하지는 않지만, 방어적으로 `Global.log_level=error` + 우리 쪽 로깅 필터를 둔다.
-5. **`rapidocr`의 PP-OCRv6 multi rec 모델**이 새로 생겼다. 한국어 지원 여부와 정확도는 미확인 → 벤치마크 후보로만 둔다.
+5. **PP-OCRv6 인식 모델은 한국어 미지원** (중·영·일·라틴 계열 50개 언어). v6는 검출기만 비교 후보로 둔다 (2절).
 
-## 2. 모델 파일
+## 2. 모델 파일 (✅ 확인 완료, 2026-10-07)
 
-### `monkt/paddleocr-onnx` (Hugging Face)
+### 확인 결과 (개발 PC에서 확인)
 
-**이 작업 환경에서는 huggingface.co 접근이 네트워크 정책으로 차단되어(403) 파일 목록을 직접 확인하지 못했다.**
-개발 PC에서 아래를 확인해야 한다.
+| 항목 | 결과 |
+|---|---|
+| `monkt/paddleocr-onnx` | 존재. `detection/v5/det.onnx`(84MB), `languages/korean/rec.onnx`(13MB), `languages/korean/dict.txt` 경로 그대로 |
+| `PaddlePaddle/korean_PP-OCRv5_mobile_rec`, `PP-OCRv5_server_det`, `PP-OCRv5_mobile_det` | 모두 존재 (Paddle 형식 원본) |
+| RapidOCR 공식 URL | `rapidocr` 3.9.2 휠의 `default_models.yaml`과 일치 |
+| monkt `det.onnx` | README에 server/mobile 구분 없음. 크기(84MB)로 보아 **server 모델로 판단** |
 
-- [ ] `detection/v5/det.onnx`, `languages/korean/rec.onnx`, `languages/korean/dict.txt` 경로가 실제로 존재하는지
-- [ ] `det.onnx` 약 84MB → 크기상 PP-OCRv5 **server** det일 가능성이 높음 (mobile det는 수 MB). CPU 지연시간에 큰 영향
-- [ ] rec.onnx에 문자 사전이 내장되어 있는지 (없으면 dict.txt 필수)
-- [ ] 라이선스(Apache 2.0) 및 원본 Paddle 모델 버전 명시 여부
-- [ ] 파일 SHA256을 기록해 다운로드 스크립트에서 검증
+PaddleOCR 공식 모델 목록 기준 검출 모델 비교:
 
-확인 명령 예시 (개발 PC):
+| 검출 모델 | 크기 | 정확도(Hmean) | CPU 추론 |
+|---|---|---|---|
+| PP-OCRv5_server_det | 101MB | 83.8% | 383ms |
+| PP-OCRv5_mobile_det | 4.7MB | 79.0% | 58ms |
 
-```bash
-pip install huggingface_hub
-python -c "from huggingface_hub import list_repo_files as f; print('\n'.join(f('monkt/paddleocr-onnx')))"
-```
+신분증은 글자가 크고 반듯한 인쇄체라 mobile 검출로도 정확도 손실이 작을 것으로 보고, CPU에서 6~7배 빠른 mobile을 기본으로 한다.
 
-### 대안: RapidOCR 공식 배포 모델 (modelscope)
+### ✅ 기본 모델 조합: 출처를 RapidOCR 공식 배포 하나로 통일
 
-`rapidocr` 3.9.2의 `default_models.yaml`에 한국어 모델이 공식 등록되어 있다. 출처가 RapidOCR 본가라 API 호환성이 보장된다.
-
-| 용도 | 모델 키 | SHA256 (앞 16자) |
+| 용도 | 모델 | SHA256 |
 |---|---|---|
-| 인식 (ONNX) | `korean_PP-OCRv5_rec_mobile` | `cd6e2ea50f6943ca` |
-| 인식 (ONNX, 구버전) | `korean_PP-OCRv4_rec_mobile` | `ab151ba9065eccd9` |
-| 검출 | `ch_PP-OCRv5_det_mobile` / `ch_PP-OCRv5_det_server` | (yaml 참조) |
+| 검출 | `ch_PP-OCRv5_det_mobile.onnx` ("ch"지만 v5 검출기는 다국어 공용) | `4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae` |
+| 인식 | `korean_PP-OCRv5_rec_mobile.onnx` | `cd6e2ea50f6943ca7271eb8c56a877a5a90720b7047fe9c41a2e541a25773c9b` |
+| 사전 | `ppocrv5_korean_dict.txt` | (yaml에 해시 없음 → 받은 뒤 직접 기록) |
+| 방향 분류 | `ch_ppocr_mobile_v2.0_cls_mobile.onnx` (rapidocr Cls 기본값, 0°/180°) | `e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c` |
 
-URL 형식: `https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/rec/korean_PP-OCRv5_rec_mobile.onnx`
+URL 접두사: `https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/`
+- `onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx`
+- `onnx/PP-OCRv5/rec/korean_PP-OCRv5_rec_mobile.onnx`
+- `paddle/PP-OCRv5/rec/korean_PP-OCRv5_rec_mobile/ppocrv5_korean_dict.txt`
+- `onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_mobile.onnx`
 
-**제안**: Phase 0 벤치마크에서 `monkt` 모델과 RapidAI 공식 모델을 같은 샘플로 비교하고, 정확도가 비슷하면
-API 호환성·해시 검증이 쉬운 공식 모델을 쓴다. 검출 모델은 mobile/server 둘 다 측정한다.
+모델은 **Docker 이미지 빌드 시점에 받아 SHA256 검증** 후 포함한다. 런타임 다운로드 없음.
+(modelscope가 빌드 환경에서 막히면 개발 PC에서 받아 `models/`에 두고 COPY.)
+
+### 비교 후보 (평가 하네스에서 측정)
+
+| 조합 | 목적 |
+|---|---|
+| v5 mobile det + v5 korean rec | **기본** |
+| v5 server det + v5 korean rec | 정확도 상한 확인 |
+| **v6 det small + v5 korean rec** | v6 검출기가 v5보다 정확하다고 함. `multi_PP-OCRv6_det_small` SHA256 `090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f` |
+| monkt det(server) + monkt korean rec | monkt 모델은 비교용으로만 보관 |
+
+### ⚠️ 초기화 시 반드시 모델을 명시
+
+rapidocr 3.9.2 기본값은 `ocr_version: PP-OCRv6`, `lang_type: ch`인데 **PP-OCRv6 인식 모델은 한국어를 지원하지 않는다**
+(중·영·일·라틴 계열 50개 언어). 옵션 없이 `RapidOCR()`만 호출하면 한글이 제대로 인식되지 않는다.
+→ `engine.py`에서 Det/Rec/Cls `model_path`를 **항상 명시**하고, 기동 시 한글 샘플 문자열 인식 self-test로 잘못된 모델 로드를 막는다.
 
 ## 3. 기타 라이브러리 버전
 
