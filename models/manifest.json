@@ -1,0 +1,33 @@
+{
+  "base_url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/",
+  "profiles": {
+    "default": ["det_v5_mobile", "rec_korean_v5_mobile", "rec_korean_v5_dict", "cls_v2_mobile"],
+    "compare": ["det_v5_server", "det_v6_small"]
+  },
+  "files": {
+    "det_v5_mobile": {
+      "path": "onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx",
+      "sha256": "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae"
+    },
+    "rec_korean_v5_mobile": {
+      "path": "onnx/PP-OCRv5/rec/korean_PP-OCRv5_rec_mobile.onnx",
+      "sha256": "cd6e2ea50f6943ca7271eb8c56a877a5a90720b7047fe9c41a2e541a25773c9b"
+    },
+    "rec_korean_v5_dict": {
+      "path": "paddle/PP-OCRv5/rec/korean_PP-OCRv5_rec_mobile/ppocrv5_korean_dict.txt",
+      "sha256": null
+    },
+    "cls_v2_mobile": {
+      "path": "onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_mobile.onnx",
+      "sha256": "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c"
+    },
+    "det_v5_server": {
+      "path": "onnx/PP-OCRv5/det/ch_PP-OCRv5_det_server.onnx",
+      "sha256": "0f8846b1d4bba223a2a2f9d9b44022fbc22cc019051a602b41a7fda9667e4cad"
+    },
+    "det_v6_small": {
+      "path": "onnx/PP-OCRv6/det/PP-OCRv6_det_small.onnx",
+      "sha256": "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
+    }
+  }
+}

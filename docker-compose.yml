@@ -1,0 +1,27 @@
+services:
+  idocr:
+    build:
+      context: .
+      args:
+        VERIFY_MODELS: ${VERIFY_MODELS:-1}
+    image: idocr:0.1.0
+    # 호출 서비스는 같은 호스트의 Docker 밖 → 루프백에만 노출
+    ports:
+      - "127.0.0.1:${IDOCR_PORT:-8000}:8000"
+    environment:
+      IDOCR_OCR_WORKERS: ${IDOCR_OCR_WORKERS:-2}
+      IDOCR_ORT_INTRA_THREADS: ${IDOCR_ORT_INTRA_THREADS:-3}
+      IDOCR_ENABLE_RAW_ENDPOINT: ${IDOCR_ENABLE_RAW_ENDPOINT:-false}
+      IDOCR_LOG_LEVEL: ${IDOCR_LOG_LEVEL:-INFO}
+    # 개인정보: 디스크 기록 차단, 코어 덤프 비활성화
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    ulimits:
+      core: 0
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: ${IDOCR_MEM_LIMIT:-2g}
+    restart: unless-stopped

@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.env
+
+# 모델 바이너리 (manifest만 추적)
+models/*
+!models/manifest.json
+
+# 실물 신분증 이미지는 절대 커밋하지 않음
+samples/
